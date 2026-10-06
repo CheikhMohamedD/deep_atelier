@@ -1,6 +1,6 @@
 # ADR 0001 — Architecture de la Phase 1 (MVP web)
 
-- **Statut** : proposé, en attente de réponses aux questions ouvertes (§ 12)
+- **Statut** : accepté le 2026-10-06 ; questions ouvertes posées étape par étape (§ 12)
 - **Date** : 2026-10-06
 - **Référence** : [`docs/SPEC.md`](../SPEC.md) (prompt maître et spécifications)
 
@@ -736,8 +736,44 @@ Résultat : `{ "ok": true, "created": { "$features": "n_…", "$grid": "n_…" }
 
 ## 12. Questions ouvertes
 
-1. Data binding (« Should ») : dans la Phase 1 ? Conditionne aussi le contenu d'une route dynamique.
-2. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ?
-3. Prompt à partir d'une URL (multimodal) en Phase 1 ?
-4. Langue de l'interface de l'éditeur.
-5. Validation du découpage (§ 11), dont l'étape (b2).
+Posées au propriétaire une par une, juste avant l'étape qu'elles conditionnent. Chaque réponse est
+consignée ici (question → décision, avec la date).
+
+**Avant (a)**
+
+1. Data binding (« Should » dans la spec) : dans la Phase 1 ? Si oui, le schéma l'intègre dès (a) ;
+   sinon il arrive plus tard par une migration d'IR. Conditionne aussi le contenu d'une route dynamique.
+2. Validation du découpage (§ 11), dont la nouvelle étape (b2).
+
+**Avant (b2)**
+
+3. Projet Supabase hébergé : organisation, région, offre.
+
+**Avant (c)**
+
+4. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
+5. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
+   build seulement à l'export, dans un job serveur.
+
+**Avant (f)**
+
+6. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
+
+---
+
+## 13. Environnement de développement (décidé le 2026-10-06)
+
+- **Dépôt** public : `github.com/CheikhMohamedD/atelier`, sans licence pour l'instant (tous droits
+  réservés). Commits signés de l'adresse noreply GitHub du propriétaire (voir `CLAUDE.md`).
+- **Développement dans des sessions Claude Code cloud**, rien n'est installé sur le poste local.
+  L'image cloud fournit rustc/cargo, Node 22 avec pnpm, Docker et PostgreSQL 16.
+- **Outillage complémentaire** (cible `wasm32-unknown-unknown`, `wasm-bindgen-cli`, navigateurs
+  Playwright) : ajouté au script de setup de l'environnement cloud à l'étape (c), pour être mis en
+  cache. Les téléchargements de releases GitHub d'autres dépôts sont bloqués : `wasm-bindgen-cli`
+  s'installe par `cargo install`, à la version exacte de la crate `wasm-bindgen`.
+- **Supabase hébergé**, pas de Docker local. Le projet est créé à l'étape (b2). L'accès réseau
+  « Trusted » des sessions cloud n'inclut pas Supabase : à l'étape (b2), passer l'environnement en
+  « Custom » (liste par défaut + `*.supabase.co`, `api.supabase.com`).
+- **Secrets** : jamais dans le dépôt (il est public). Ils vont dans les variables d'environnement
+  de l'environnement cloud ou, sur Pro/Max, dans ses credentials API. `ANTHROPIC_API_KEY` (évals,
+  étape f) reste une variable d'environnement : le proxy n'attache pas de credential à `api.anthropic.com`.

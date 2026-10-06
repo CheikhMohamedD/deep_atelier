@@ -8,7 +8,7 @@ versionné et exportable. Le code édité à la main se reflète sur le canvas.
 
 ## État
 
-Phase 1 (MVP web), étape 1 : architecture proposée, implémentation pas encore commencée.
+Phase 1 (MVP web) : architecture acceptée, prochaine étape (a) `crates/ir`.
 
 - Spécifications : [`docs/SPEC.md`](docs/SPEC.md)
 - Architecture de la Phase 1 : [`docs/adr/0001-architecture-phase1.md`](docs/adr/0001-architecture-phase1.md)
