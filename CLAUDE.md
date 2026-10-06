@@ -1,4 +1,4 @@
-# Atelier — consignes pour les agents
+# Deep Atelier — consignes pour les agents
 
 ## À lire avant toute tâche
 
@@ -23,7 +23,7 @@
 - Toute mutation de l'IR passe par une `Command` ; jamais de modification directe.
 - Aucun concept DOM/CSS dans le cœur de l'IR (les échappatoires web vivent dans `platform_overrides.web`).
 - Mobile-first : aucune fonctionnalité n'est terminée sans test aux largeurs 390, 768 et 1280 px.
-- Le code exporté ne dépend jamais d'Atelier au runtime.
+- Le code exporté ne dépend jamais de Deep Atelier au runtime.
 - Les types TS et les schémas d'outils sont générés (`cargo xtask codegen`) : ne jamais les éditer à la main.
 
 ## Dépôt public

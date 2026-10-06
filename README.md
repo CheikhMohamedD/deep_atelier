@@ -1,4 +1,4 @@
-# Atelier
+# Deep Atelier
 
 Website builder orienté développeurs : le canvas visuel est l'interface principale, et chaque
 action — à la souris ou par prompt — produit du code React + TypeScript + Tailwind lisible,

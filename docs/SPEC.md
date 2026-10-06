@@ -4,7 +4,7 @@ Oct 6, 2026 · @Cheikh Mohamed
 
 ## Vision & positionnement
 
-Atelier (nom de code) est un website builder où le canvas visuel est l'interface principale, mais où chaque action produit du vrai code lisible, versionné et exportable. Cible v1 : sites et apps web en React/Next.js, responsive mobile-first. Cible v2 : apps mobiles natives depuis le même projet.
+Deep Atelier (nom de code) est un website builder où le canvas visuel est l'interface principale, mais où chaque action produit du vrai code lisible, versionné et exportable. Cible v1 : sites et apps web en React/Next.js, responsive mobile-first. Cible v2 : apps mobiles natives depuis le même projet.
 
 **La promesse en une phrase :** la vitesse d'un outil visuel, la liberté d'un IDE, sans lock-in.
 
@@ -28,7 +28,7 @@ Atelier (nom de code) est un website builder où le canvas visuel est l'interfac
 
 ```markdown
 RÔLE
-Tu es un architecte logiciel senior et un ingénieur expert en Rust, WebAssembly, React/TypeScript, compilateurs AST, éditeurs visuels (type Figma/Webflow) et intégration de LLM par outils. Tu construis « Atelier », un website builder orienté développeurs dont l'interface principale est un canvas visuel piloté à la fois par la souris et par le prompt, et non un éditeur de texte.
+Tu es un architecte logiciel senior et un ingénieur expert en Rust, WebAssembly, React/TypeScript, compilateurs AST, éditeurs visuels (type Figma/Webflow) et intégration de LLM par outils. Tu construis « Deep Atelier », un website builder orienté développeurs dont l'interface principale est un canvas visuel piloté à la fois par la souris et par le prompt, et non un éditeur de texte.
 
 OBJECTIF
 Livrer la Phase 1 (MVP web) décrite dans les spécifications jointes : un éditeur où l'on construit une page par glisser-déposer ET par prompt sur un canvas, où chaque action produit du code React + TypeScript + Tailwind propre, et où le code édité à la main se reflète sur le canvas (synchronisation bidirectionnelle).
@@ -70,7 +70,7 @@ CRITÈRES DE SUCCÈS DU MVP
 
 Le persona principal est le développeur front/full-stack qui veut livrer vite sans perdre le contrôle du code ; les autres en bénéficient sans dicter les choix.
 
-| Persona | Besoin principal | Ce qu'il fait dans Atelier |
+| Persona | Besoin principal | Ce qu'il fait dans Deep Atelier |
 | --- | --- | --- |
 | Dev full-stack / freelance (principal) | Livrer des sites clients vite, garder un code propre | Maquette au canvas, ajuste dans le code, exporte vers son repo |
 | Designer-dev | Passer de la maquette au code sans double travail | Construit au canvas avec les tokens, importe depuis Figma (Phase 3) |
@@ -87,7 +87,7 @@ Le persona principal est le développeur front/full-stack qui veut livrer vite s
 
 ## Interface de l'éditeur
 
-Le canvas occupe le centre et au moins 60 % de l'écran ; tout le reste est un panneau rétractable. C'est ce choix qui distingue Atelier d'un IDE, où le texte occupe le centre.
+Le canvas occupe le centre et au moins 60 % de l'écran ; tout le reste est un panneau rétractable. C'est ce choix qui distingue Deep Atelier d'un IDE, où le texte occupe le centre.
 
 &#91;embedded content: éditeur en mode Design · 5 zones\]
 
@@ -174,7 +174,7 @@ Les deux « Won't » sont exclus du MVP pour tenir le périmètre ; la Phase 3 l
 
 ## Responsive mobile-first
 
-Le responsive est une exigence de premier plan, pas une option : tout site produit par Atelier doit être correct à 390 px avant d'exister en desktop. L'IR, l'inspecteur, le canvas et le compilateur sont conçus autour de cette règle.
+Le responsive est une exigence de premier plan, pas une option : tout site produit par Deep Atelier doit être correct à 390 px avant d'exister en desktop. L'IR, l'inspecteur, le canvas et le compilateur sont conçus autour de cette règle.
 
 **Breakpoints (alignés sur Tailwind)**
 
@@ -233,7 +233,7 @@ Canvas, code et IA écrivent tous dans l'IR ; le compilateur natif (pointillés)
 
 **Choix du langage : Rust plutôt que Go**
 
-Le cœur d'Atelier est un compilateur (TSX ⇄ IR ⇄ code) qui doit tourner dans le navigateur pour tenir la synchro sous 300 ms, et sur le serveur pour l'export et la validation des sorties IA. Rust se compile proprement en WASM et dispose des meilleurs parsers TypeScript ; Go non.
+Le cœur de Deep Atelier est un compilateur (TSX ⇄ IR ⇄ code) qui doit tourner dans le navigateur pour tenir la synchro sous 300 ms, et sur le serveur pour l'export et la validation des sorties IA. Rust se compile proprement en WASM et dispose des meilleurs parsers TypeScript ; Go non.
 
 | Critère | Rust | Go | Avantage |
 | --- | --- | --- | --- |
@@ -335,7 +335,7 @@ La v2 génère des apps iOS/Android avec React Native + Expo depuis le même pro
 - Composants natifs spécifiques : tab bar, stack navigator, bottom sheet, gestion du clavier.
 - Accès aux API de l'appareil (caméra, notifications push, localisation) via des actions déclaratives.
 
-**Hors périmètre** : Flutter, Swift/Kotlin natif, partage de code avec des apps existantes non créées dans Atelier.
+**Hors périmètre** : Flutter, Swift/Kotlin natif, partage de code avec des apps existantes non créées dans Deep Atelier.
 
 ## Roadmap & critères d'acceptation
 
@@ -356,6 +356,6 @@ Les durées sont des estimations à recaler après la Phase 1 ; les portes, elle
 - [ ] Un clic au canvas place le curseur sur la bonne ligne JSX, et inversement
 - [ ] Le code exporté passe `pnpm build`, ESLint et TypeScript strict sans erreur
 - [ ] Le site exporté obtient Lighthouse mobile ≥ 90 (performance et accessibilité)
-- [ ] Aucune dépendance à Atelier dans le `package.json` exporté
+- [ ] Aucune dépendance à Deep Atelier dans le `package.json` exporté
 - [ ] Undo/redo fiable sur 100 actions consécutives
 - [ ] Le schéma de l'IR contient déjà `targets` et les marqueurs `web-only` / `native-only`

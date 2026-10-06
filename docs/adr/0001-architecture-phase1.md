@@ -29,7 +29,7 @@ Il sert de référence à toutes les PR (a) → (i).
 ## 2. Arborescence du monorepo
 
 ```
-atelier/
+deep_atelier/
 ├─ Cargo.toml                    # workspace : crates/*, xtask
 ├─ rust-toolchain.toml           # stable + wasm32-unknown-unknown, clippy, rustfmt
 ├─ package.json                  # scripts turbo : dev, build, test, lint, codegen
@@ -638,7 +638,7 @@ Exemple `insert_nodes` :
       "meta": { "name": "Features", "anchor": "features" },
       "style": { "padding_y": { "base": "16", "md": "24" }, "padding_x": { "base": "4", "md": "8" } } },
     { "parent": "$features",
-      "kind": { "type": "Text", "role": { "kind": "Heading", "level": "h2" }, "content": [{ "text": "Pourquoi Atelier" }] },
+      "kind": { "type": "Text", "role": { "kind": "Heading", "level": "h2" }, "content": [{ "text": "Pourquoi Deep Atelier" }] },
       "style": { "font_size": { "base": "3xl", "md": "4xl" }, "font_weight": { "base": "bold" },
                  "text_align": { "base": "center" }, "text_wrap": { "base": "balance" } } },
     { "ref": "$grid", "parent": "$features", "kind": { "type": "Grid", "role": { "kind": "List" } },
@@ -763,7 +763,7 @@ consignée ici (question → décision, avec la date).
 
 ## 13. Environnement de développement (décidé le 2026-10-06)
 
-- **Dépôt** public : `github.com/CheikhMohamedD/atelier`, sans licence pour l'instant (tous droits
+- **Dépôt** public : `github.com/CheikhMohamedD/deep_atelier`, sans licence pour l'instant (tous droits
   réservés). Commits signés de l'adresse noreply GitHub du propriétaire (voir `CLAUDE.md`).
 - **Développement dans des sessions Claude Code cloud**, rien n'est installé sur le poste local.
   L'image cloud fournit rustc/cargo, Node 22 avec pnpm, Docker et PostgreSQL 16.
