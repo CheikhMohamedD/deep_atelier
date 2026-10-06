@@ -1,0 +1,39 @@
+# Rust
+target/
+
+# Node / pnpm / Turborepo
+node_modules/
+.pnpm-store/
+.turbo/
+dist/
+*.tsbuildinfo
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# wasm-bindgen
+packages/engine/pkg/
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Environnement
+.env
+.env.*
+!.env.example
+
+# Divers
+.DS_Store
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
