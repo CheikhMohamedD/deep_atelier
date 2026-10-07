@@ -749,19 +749,28 @@ consignée ici (question → décision, avec la date).
 2. Validation du découpage (§ 11), dont la nouvelle étape (b2).
    - **Décision (2026-10-06) : découpage validé tel quel**, (b2) entre (b) et (c).
 
+**Avant (b)**
+
+3. Version de Next.js du code exporté (l'éditeur reste en Next 15, imposé par la spec).
+   - **Décision (2026-10-07) : Next.js 16** (16.4.0, dernière stable à la date de la décision).
+     Le compilateur épingle les versions exactes dans le `package.json` exporté.
+4. Mode sombre du site exporté.
+   - **Décision (2026-10-07) : suivre le système.** Les valeurs sombres des tokens sont émises dans
+     une media query `prefers-color-scheme: dark` : aucun JavaScript, aucun flash au chargement.
+
 **Avant (b2)**
 
-3. Projet Supabase hébergé : organisation, région, offre.
+5. Projet Supabase hébergé : organisation, région, offre.
 
 **Avant (c)**
 
-4. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
-5. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
+6. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
+7. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
    build seulement à l'export, dans un job serveur.
 
 **Avant (f)**
 
-6. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
+8. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
 
 ---
 
@@ -853,3 +862,13 @@ Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux point
 20. `cargo xtask codegen` (§ 2) est livré avec son premier consommateur, `packages/ir-types` à
     l'étape (c). En (a), la génération TypeScript (ts-rs) et JSON Schema (schemars) est couverte par
     des tests, dont l'absence de récursion dans le schéma de `Command` (mode `strict`).
+
+**Reste à faire de la revue de la PR #1 (constaté le 2026-10-07)**
+
+21. La PR #1 a été fusionnée avant son dernier lot de corrections, « validation (schéma, ordre de
+    rendu) » : 14 défauts confirmés par la revue, dont la perte du contenu des slots imbriqués dans
+    l'ordre de rendu (`render_order`). Le détail des constats n'a pas été conservé. Aucun lot de
+    correction n'a touché `validate/schema.rs`, `validate/mod.rs` ni `validate/contrast.rs` :
+    ils sont à ré-auditer, puis à corriger avec des tests de non-régression, avant l'étape (b).
+22. Ce § 14 n'a pas encore été complété avec les changements de comportement issus des quatre lots
+    de corrections fusionnés (`ops-history`, `lower`, `style`, `validate-a11y-resp`).

@@ -12,6 +12,9 @@
 - Avant de coder une étape, poser au propriétaire les questions qui la concernent (ADR 0001 § 12),
   **une par une**, avec l'outil de question (options + recommandation), et attendre chaque réponse.
   Consigner la décision dans l'ADR avant d'implémenter.
+- Pousser le travail au fil de l'eau : un lot prêt = un commit poussé. Rien ne doit exister
+  seulement dans une session, ni constat de revue, ni correction.
+- Une PR reste en brouillon (draft) tant qu'une case de sa description n'est pas cochée.
 - Code complet à chaque étape : pas de pseudo-code, pas de TODO. Tests inclus, plus une courte note
   sur les choix faits et les limites connues dans la description de la PR.
 - Spécification ambiguë → poser la question au propriétaire, ne pas inventer. Une décision nouvelle
