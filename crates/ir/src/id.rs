@@ -120,13 +120,18 @@ pub(crate) fn is_kebab_case(text: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Longueur maximale d'un nom de token.
+pub(crate) const TOKEN_NAME_MAX_LEN: usize = 48;
+
+/// Couleurs de base réservées (en plus des noms de palette `<teinte>-<nuance>`).
+const RESERVED_TOKEN_NAMES: [&str; 4] = ["white", "black", "transparent", "current"];
+
 impl FromStr for TokenName {
     type Err = ValueError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let reserved = matches!(s, "white" | "black" | "transparent" | "current")
-            || crate::style::color::parse_palette(s).is_some();
-        if is_kebab_case(s) && s.len() <= 48 && !reserved {
+        let reserved = RESERVED_TOKEN_NAMES.contains(&s) || crate::style::color::parse_palette(s).is_some();
+        if is_kebab_case(s) && s.len() <= TOKEN_NAME_MAX_LEN && !reserved {
             Ok(Self(s.to_owned()))
         } else {
             Err(ValueError::new("TokenName", s))
@@ -134,7 +139,29 @@ impl FromStr for TokenName {
     }
 }
 
-string_serde!(TokenName, |_| pattern_schema("^[a-z][a-z0-9]*(-[a-z0-9]+)*$"));
+/// Schéma de `TokenName` : motif kebab-case et longueur maximale. Exclure les noms réservés
+/// demanderait `not` ou un lookahead, mal pris en charge par les schémas d'outils stricts : ils
+/// sont listés dans la description.
+fn token_name_schema() -> schemars::Schema {
+    use crate::style::color::{Hue, Shade};
+    let hues: Vec<&str> = Hue::ALL.iter().map(|hue| hue.as_str()).collect();
+    let shades: Vec<&str> = Shade::ALL.iter().map(|shade| shade.as_str()).collect();
+    let description = format!(
+        "Nom de token en kebab-case, {TOKEN_NAME_MAX_LEN} caractères au plus. Noms réservés, refusés : {}, \
+         et les couleurs de palette `<teinte>-<nuance>` (teintes : {} ; nuances : {}).",
+        RESERVED_TOKEN_NAMES.join(", "),
+        hues.join(", "),
+        shades.join(", "),
+    );
+    schemars::json_schema!({
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+        "maxLength": TOKEN_NAME_MAX_LEN,
+        "description": description,
+    })
+}
+
+string_serde!(TokenName, |_| token_name_schema());
 
 /// Référence de nœud dans une commande : id existant (`n_…`) ou référence locale (`$nom`)
 /// créée plus tôt dans la transaction ou dans le run IA.

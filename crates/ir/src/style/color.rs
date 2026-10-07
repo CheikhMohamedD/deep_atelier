@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use ts_rs::TS;
 
 use crate::error::{ValueError, pattern_schema};
-use crate::id::TokenName;
+use crate::id::{TOKEN_NAME_MAX_LEN, TokenName};
 use crate::macros::{string_enum, string_serde};
 use crate::style::values::Alpha;
 
@@ -172,9 +172,24 @@ impl FromStr for ColorRef {
     }
 }
 
-string_serde!(ColorRef, |_| pattern_schema(
-    "^[a-z][a-z0-9]*(-[a-z0-9]+)*(/(5|[1-9][05]))?$"
-));
+/// Schéma de `ColorRef`. Le motif ne peut pas borner la longueur du nom sans lookahead, et
+/// `maxLength` (refusé par les schémas d'outils stricts) porterait sur la chaîne entière, opacité
+/// comprise : la borne des noms de token est annoncée dans la description.
+fn color_ref_schema() -> schemars::Schema {
+    let description = format!(
+        "Référence de couleur : token du projet (`primary`), couleur de palette `<teinte>-<nuance>` \
+         (`slate-900`), `white`, `black`, `transparent` ou `current`, suivie d'une opacité facultative \
+         `/5` à `/95` par pas de 5 (`primary/80`). Nom de token en kebab-case, {TOKEN_NAME_MAX_LEN} \
+         caractères au plus."
+    );
+    schemars::json_schema!({
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(/(5|[1-9][05]))?$",
+        "description": description,
+    })
+}
+
+string_serde!(ColorRef, |_| color_ref_schema());
 
 /// Couleur sRGB normalisée (composantes 0..=1) avec alpha.
 #[derive(Debug, Clone, Copy, PartialEq)]

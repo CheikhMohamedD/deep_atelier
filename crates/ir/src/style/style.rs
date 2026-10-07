@@ -102,12 +102,13 @@ macro_rules! value_types {
 
         impl ResponsiveValuePatch {
             /// Applique le patch ; `neutral` fournit une valeur de base (même variante) si la
-            /// propriété est absente.
+            /// propriété est absente. Une propriété absente le reste (`None`) si le patch ne pose
+            /// aucune valeur (patch vide ou effacements seuls).
             pub fn apply(
                 &self,
                 current: Option<ResponsiveValue>,
                 neutral: impl FnOnce() -> ResponsiveValue,
-            ) -> Result<ResponsiveValue, StyleError> {
+            ) -> Result<Option<ResponsiveValue>, StyleError> {
                 match self {
                     $(ResponsiveValuePatch::$variant(patch) => {
                         let current = match current {
@@ -118,13 +119,14 @@ macro_rules! value_types {
                         let start = match (current, &patch.base) {
                             (Some(value), _) => value,
                             (None, Some(base)) => Responsive::new(base.clone()),
+                            (None, None) if !patch.sets_value() => return Ok(None),
                             (None, None) => match neutral() {
                                 ResponsiveValue::$variant(value) => Responsive::new(value.base),
                                 _ => return Err(StyleError::TypeMismatch(stringify!($variant))),
                             },
                         };
                         let value = patch.merge_into(start);
-                        Ok(ResponsiveValue::$variant(value))
+                        Ok(Some(ResponsiveValue::$variant(value)))
                     })+
                 }
             }

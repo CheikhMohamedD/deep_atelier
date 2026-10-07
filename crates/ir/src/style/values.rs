@@ -164,6 +164,9 @@ impl ContainerSize {
 /// Valeur maximale acceptée pour `Size::Px`.
 pub const MAX_PX: u16 = 4000;
 
+// Le motif `Px` du schéma de `Size` encode cette borne : à mettre à jour ensemble.
+const _: () = assert!(MAX_PX == 4000);
+
 /// Dimension (largeur, hauteur et leurs bornes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, TS)]
 #[ts(type = "string")]
@@ -259,10 +262,11 @@ string_serde!(Size, |_| {
     values.extend(Fraction::ALL.iter().map(ToString::to_string));
     values.extend(Space::ALL.iter().map(ToString::to_string));
     values.extend(ContainerSize::ALL.iter().map(|c| Size::Container(*c).to_string()));
+    // `Px` : de 1 à `MAX_PX` (4000), sans zéro initial, comme le parseur.
     schemars::json_schema!({
         "anyOf": [
             { "type": "string", "enum": values },
-            { "type": "string", "pattern": "^[1-9][0-9]{0,3}px$" }
+            { "type": "string", "pattern": "^([1-9][0-9]{0,2}|[1-3][0-9]{3}|4000)px$" }
         ]
     })
 });

@@ -184,14 +184,40 @@ pub(crate) mod double_option {
     }
 }
 
+/// Désérialise le `base` d'un patch : absent (`None`) ou valeur ; `null` est refusé.
+mod non_null_base {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer};
+
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+    where
+        T: Deserialize<'de>,
+        D: Deserializer<'de>,
+    {
+        match Option::<T>::deserialize(deserializer)? {
+            Some(value) => Ok(Some(value)),
+            None => Err(D::Error::custom(
+                "`base` cannot be null: omit it to keep the current base, or set the whole property \
+                 to null to remove it",
+            )),
+        }
+    }
+}
+
 /// Patch d'une valeur responsive : breakpoint absent = inchangé, `null` = surcharge effacée
-/// (« réinitialiser à l'héritage »), valeur = posée. `base` ne peut pas être effacé : pour
-/// supprimer la propriété, le patch de style la met à `null`.
+/// (« réinitialiser à l'héritage »), valeur = posée. `base` ne peut pas être effacé (`null` est
+/// une erreur de désérialisation) : pour supprimer la propriété, le patch de style la met à `null`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
 #[schemars(bound = "T: JsonSchema", rename = "ResponsivePatch_{T}")]
 pub struct ResponsivePatch<T> {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    // Schéma non nullable : `base` est optionnel, mais jamais `null`.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "non_null_base::deserialize"
+    )]
+    #[schemars(with = "T")]
     #[ts(optional)]
     pub base: Option<T>,
     #[serde(
@@ -304,15 +330,22 @@ impl<T: Clone> ResponsivePatch<T> {
         self.touched().is_empty()
     }
 
+    /// Vrai si le patch pose au moins une valeur (`base` ou surcharge).
+    pub fn sets_value(&self) -> bool {
+        Breakpoint::ALL.into_iter().any(|bp| self.entry(bp).flatten().is_some())
+    }
+
     /// Applique le patch à une valeur existante, ou à `neutral` si la propriété est absente
-    /// (la base neutre ne change pas le rendu en `base`).
-    pub fn apply(&self, current: Option<Responsive<T>>, neutral: impl FnOnce() -> T) -> Responsive<T> {
+    /// (la base neutre ne change pas le rendu en `base`). Une propriété absente le reste si le
+    /// patch ne pose aucune valeur (patch vide ou effacements seuls) : `None`.
+    pub fn apply(&self, current: Option<Responsive<T>>, neutral: impl FnOnce() -> T) -> Option<Responsive<T>> {
         let start = match (current, &self.base) {
             (Some(value), _) => value,
             (None, Some(base)) => Responsive::new(base.clone()),
+            (None, None) if !self.sets_value() => return None,
             (None, None) => Responsive::new(neutral()),
         };
-        self.merge_into(start)
+        Some(self.merge_into(start))
     }
 
     /// Applique le patch à une valeur de départ.
@@ -367,7 +400,7 @@ mod tests {
         assert_eq!(patch.sm, None);
         let mut current = Responsive::new(1);
         current.set(Breakpoint::Md, 2);
-        let next = patch.apply(Some(current), || 0);
+        let next = patch.apply(Some(current), || 0).unwrap();
         assert_eq!(next.declared(), vec![Breakpoint::Base, Breakpoint::Lg]);
         assert_eq!(serde_json::to_string(&patch).unwrap(), r#"{"md":null,"lg":4}"#);
     }
@@ -375,7 +408,7 @@ mod tests {
     #[test]
     fn override_on_absent_property_keeps_base_neutral() {
         let patch = ResponsivePatch::at(Breakpoint::Lg, 8);
-        let next = patch.apply(None, || 0);
+        let next = patch.apply(None, || 0).unwrap();
         assert_eq!(next.base, 0);
         assert_eq!(next.lg, Some(8));
     }

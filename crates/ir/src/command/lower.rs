@@ -1202,7 +1202,7 @@ impl<'a> Lowering<'a> {
                 PropChange::Remove => None,
                 PropChange::Merge(patch) => {
                     let doc = &*self.doc;
-                    Some(patch.apply(current.clone(), || neutral_value(doc, node, state, prop))?)
+                    patch.apply(current.clone(), || neutral_value(doc, node, state, prop))?
                 }
             };
             if next != current {
@@ -1236,7 +1236,7 @@ impl<'a> Lowering<'a> {
     fn set_visibility(&mut self, id: &NodeId, patch: Option<&ResponsivePatch<bool>>) -> Result<(), CommandError> {
         self.check_breakpoint_scope(patch.map(ResponsivePatch::touched))?;
         let current = self.node(id)?.visibility.clone();
-        let next = patch.map(|p| p.apply(current.clone(), || true));
+        let next = patch.and_then(|p| p.apply(current.clone(), || true));
         if next != current {
             self.emit(Op::SetVisibility {
                 node: id.clone(),
