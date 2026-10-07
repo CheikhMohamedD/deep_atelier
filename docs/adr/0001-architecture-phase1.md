@@ -855,9 +855,9 @@ Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux point
 
 17. Un saut de niveau de titre n'est signalé qu'entre deux titres consécutifs ; l'absence de H1 ou
     de `Main` est un avertissement (une page en construction n'est pas bloquée).
-18. Le contraste est calculé dans les ancêtres du même arbre (une instance ne connaît pas le fond de
-    la page hôte), sans les images de fond, l'opacité des ancêtres ni les états d'interaction ; en
-    mode sombre seulement si un token définit une valeur sombre.
+18. Le contraste est calculé dans les ancêtres rendus du texte (point 22), sans les images de fond,
+    l'opacité des ancêtres ni les états d'interaction ; en mode sombre seulement si un token définit
+    une valeur sombre.
 19. Les cibles tactiles ne sont contrôlées que sur les dimensions explicites ; la taille réelle et le
     débordement horizontal relèvent de la mesure dans le navigateur (étapes c et f).
 
@@ -867,12 +867,71 @@ Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux point
     l'étape (c). En (a), la génération TypeScript (ts-rs) et JSON Schema (schemars) est couverte par
     des tests, dont l'absence de récursion dans le schéma de `Command` (mode `strict`).
 
-**Reste à faire de la revue de la PR #1 (constaté le 2026-10-07)**
+**Revue de la PR #1 : changements de comportement (complété le 2026-10-07)**
 
-21. La PR #1 a été fusionnée avant son dernier lot de corrections, « validation (schéma, ordre de
-    rendu) » : 14 défauts confirmés par la revue, dont la perte du contenu des slots imbriqués dans
-    l'ordre de rendu (`render_order`). Le détail des constats n'a pas été conservé. Aucun lot de
-    correction n'a touché `validate/schema.rs`, `validate/mod.rs` ni `validate/contrast.rs` :
-    ils sont à ré-auditer, puis à corriger avec des tests de non-régression, avant l'étape (b).
-22. Ce § 14 n'a pas encore été complété avec les changements de comportement issus des quatre lots
-    de corrections fusionnés (`ops-history`, `lower`, `style`, `validate-a11y-resp`).
+La PR #1 a été fusionnée avant son dernier lot de corrections, « validation (schéma, ordre de
+rendu) », dont le détail n'avait pas été conservé : la validation a été ré-auditée, et chaque défaut
+confirmé est couvert par `crates/ir/tests/regressions_validate_schema_render.rs`.
+
+21. **Rendu des pages** (`crates/ir/src/render.rs`, partagé par la validation et les commandes) :
+    `RenderTree::of_page` rend le layout, la page à la place de son slot `page` (une seule fois, et
+    seulement le slot écrit dans le layout), chaque instance développée, et le contenu d'un slot à
+    la place du slot, dans le contexte où l'instance est écrite. Corrigé : contenu des slots
+    imbriqués perdu, instance d'un composant dans le contenu du slot d'une instance du même
+    composant ignorée, longues pages tronquées, slot `page` d'un composant pris pour celui du
+    layout. Un nœud lié à une prop `Visible` qui vaut `false` dans une instance n'y est pas rendu.
+22. **Règles jugées au rendu.** Un nœud rendu est jugé à chacun de ses rendus ; un nœud jamais
+    rendu (composant sans instance, layout sans page) dans l'arbre où il est écrit. Le problème est
+    signalé sur le nœud placé dans l'élément parent (l'instance qui rend une racine de composant).
+    - Placement (`col_span`, `grow`, `shrink`, `align_self`, `order`) : permis selon les hôtes au
+      rendu, exactement comme les commandes (le contenu d'un slot n'est plus refusé à tort).
+    - Listes : un élément de liste est jugé à sa place au rendu ; une liste ne contient que des
+      éléments de liste ou du code libre (nouveau code `LIST_CHILD_NOT_ITEM`, exigé par l'audit
+      Lighthouse « list »).
+    - Éléments interactifs imbriqués à travers les composants et les slots.
+    - Ancres : celles d'un composant comptent pour la page qui le rend (liens valides, doublons
+      signalés) ; un lien vers une ancre est vérifié sur chaque page qui le rend, avec le lien
+      effectif (surcharge ou défaut d'une prop `Href`).
+    - Contraste : fond, couleur et taille du texte viennent des ancêtres rendus (le composant qui
+      accueille un contenu de slot, la page qui accueille une instance ; une instance porte le
+      style de la racine de son composant).
+    - Accessibilité : alt, libellés et contenu nommant liés à des props sont jugés avec la valeur
+      de chaque instance ; une surcharge vide est signalée sur l'instance.
+    - Taille de texte d'un champ : héritée des ancêtres rendus.
+23. **Règles des commandes reprises par la validation** (un document chargé, ou un brouillon IA,
+    ne peut plus les contourner) :
+    - surcharges de variantes : propriétés permises selon le type et les hôtes au rendu,
+      propriétés d'état seulement dans un état, `none` réservé aux tailles max, tokens existants ;
+    - noms des props et des axes de variantes en camelCase ; options non vides et uniques.
+24. **Nouvelles règles de schéma.**
+    - Props, axes de variantes et slots deviennent des props TypeScript : noms camelCase, uniques
+      entre eux, et pas `children` (sauf le slot par défaut), `className`, `key` ni `ref` ;
+      un champ n'est lié qu'à une prop. Le nom de slot `page` est réservé aux layouts, qui
+      n'ont pas d'autre slot. La commande d'insertion refuse un nom de slot non camelCase.
+    - Une instance ne choisit qu'une option par axe de variantes.
+    - Routes : un paramètre n'apparaît qu'une fois par route, et deux routes nomment pareil le
+      paramètre qu'elles placent au même endroit de l'arborescence (contrainte de l'App Router).
+    - Images : URL http(s) absolue, asset de type image, dimensions intrinsèques positives ; le
+      favicon est une image, l'image OG un PNG, JPEG, GIF ou WebP. Les valeurs de props (défauts et
+      surcharges) suivent les règles du champ qu'elles remplissent.
+    - Les racines de page et de layout sont des conteneurs (nouveau code `ROOT_NOT_CONTAINER`).
+    - Un nœud d'un cycle de parents n'est plus signalé en plus comme orphelin.
+25. **Lots fusionnés dans la PR #1** (tests `regressions_*.rs`) :
+    - `ops-history` : l'acceptation partielle d'un brouillon IA refuse une unité qui embarque une
+      valeur (entière, copiée, héritée) ou une entité d'une unité rejetée, ou dont le retrait
+      emporterait des nœuds qu'une unité rejetée avait supprimés ou déplacés ; une erreur déjà
+      présente avant le brouillon ne le bloque pas ; `InsertSubtree` refuse un sous-arbre
+      incohérent sans rien modifier.
+    - `lower` : une commande ne peut pas faire sortir de la sélection ; l'IA ne crée pas de
+      `RawCode` par duplication ni par détachement ; un nœud déplacé, enveloppé ou désenveloppé
+      perd le placement et le slot que son nouvel hôte n'admet pas ; le détachement garde slot,
+      a11y, verrou, plateforme et échappatoires web ; l'extraction d'un composant refuse ce dont
+      l'arbre d'origine dépend (slots, références qui franchissent sa frontière, cibles de props
+      ou de variantes) ; une page liée depuis ailleurs ne peut pas être supprimée ; une prop
+      `Visible` détachée à `true` affiche le nœud.
+    - `style` : effacer une surcharge absente ne crée pas la propriété ; `null` est refusé pour
+      `base` ; schémas des valeurs alignés sur leurs parseurs (noms de tokens réservés annoncés).
+    - `validate-a11y-resp` : les corrections responsive ne touchent que le mobile ; une cible
+      tactile se juge sur sa taille et ses minimums ; `a11y.hidden` masque tout le rendu du nœud ;
+      l'alt d'une image nomme son bouton ou son lien ; une instance ne nomme un bouton que par son
+      contenu rendu.

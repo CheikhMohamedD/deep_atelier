@@ -18,7 +18,7 @@ pub fn value_colors(value: &ResponsiveValue) -> Vec<&ColorRef> {
     }
 }
 
-fn patch_colors(patch: &ResponsiveValuePatch) -> Vec<ColorRef> {
+pub(crate) fn patch_colors(patch: &ResponsiveValuePatch) -> Vec<ColorRef> {
     match patch {
         ResponsiveValuePatch::Color(p) => p.values().into_iter().cloned().collect(),
         ResponsiveValuePatch::Background(p) => p.values().into_iter().flat_map(|b| b.colors()).cloned().collect(),
