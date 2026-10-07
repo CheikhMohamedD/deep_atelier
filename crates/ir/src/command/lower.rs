@@ -11,21 +11,24 @@ use crate::command::spec::{
     ActionSpec, ComponentPropSpec, ContainerSpec, KindSpec, MetaPatch, NodeSpec, PropsPatch, TokenEdit,
 };
 use crate::document::{
-    BindableField, Component, ComponentProp, Document, Layout, Page, PropBinding, Seo, SiteSettings, VariantAxis,
+    BindableField, Component, ComponentProp, Document, Layout, Owner, Page, PropBinding, Seo, SiteSettings,
+    VariantAxis, VariantOverride,
 };
 use crate::id::{ComponentId, IdGen, LayoutId, NodeId, NodeRef, PageId, TokenName};
 use crate::node::{
-    A11y, Action, ButtonProps, ContainerKind, ContainerProps, ContainerRole, DEFAULT_SLOT, IconProps, ImageProps,
+    A11y, Action, ButtonProps, ContainerKind, ContainerProps, ContainerRole, DEFAULT_SLOT, Href, IconProps, ImageProps,
     ImageSource, InputProps, InputType, InstanceProps, LinkProps, Node, NodeKind, NodeMeta, PAGE_SLOT,
-    PlatformOverrides, PropValue, RawCodeProps, SlotProps, TextProps, TextRole, TextRun, WebOverrides,
+    PlatformOverrides, PlatformScope, PropValue, RawCodeProps, SlotProps, TextProps, TextRole, TextRun, WebOverrides,
 };
 use crate::op::Op;
 use crate::query;
 use crate::scope::{Origin, Scope};
 use crate::style::color::{ColorRef, ColorSource};
 use crate::style::responsive::{Breakpoint, Responsive, ResponsivePatch};
-use crate::style::style::{InteractionState, PropChange, ResponsiveValue, Ring, StyleError, StyleProp};
-use crate::style::values::{AspectRatio, Direction, GridColumns, RingWidth};
+use crate::style::style::{
+    Background, InteractionState, PropChange, ResponsiveValue, ResponsiveValuePatch, Ring, StyleError, StyleProp,
+};
+use crate::style::values::{AspectRatio, Direction, GridColumns, RingWidth, Size};
 use crate::tokens::{ColorToken, FontToken, RadiusToken, ShadowToken};
 
 impl From<StyleError> for CommandError {
@@ -72,6 +75,180 @@ const PLACEMENT_PROPS: [StyleProp; 9] = [
     StyleProp::MarginBottom,
     StyleProp::MarginLeft,
 ];
+
+/// Propriétés propres au type de conteneur du nœud qui les porte.
+const CONTAINER_PROPS: [StyleProp; 6] = [
+    StyleProp::Direction,
+    StyleProp::Wrap,
+    StyleProp::Columns,
+    StyleProp::Gap,
+    StyleProp::Align,
+    StyleProp::Justify,
+];
+
+/// Propriétés qui dépendent du type de conteneur du parent.
+const PARENT_PROPS: [StyleProp; 5] = [
+    StyleProp::ColSpan,
+    StyleProp::Grow,
+    StyleProp::Shrink,
+    StyleProp::AlignSelf,
+    StyleProp::Order,
+];
+
+/// Vrai si une propriété propre à la primitive est permise sur un nœud de ce type (mêmes règles
+/// que la validation du schéma).
+fn own_prop_allowed(prop: StyleProp, kind: &NodeKind) -> bool {
+    let own = kind.container().map(|(k, _)| k);
+    match prop {
+        StyleProp::Columns => own == Some(ContainerKind::Grid),
+        StyleProp::Direction | StyleProp::Wrap => own == Some(ContainerKind::Stack),
+        StyleProp::Gap | StyleProp::Align | StyleProp::Justify => {
+            matches!(own, Some(ContainerKind::Stack | ContainerKind::Grid))
+        }
+        StyleProp::ObjectFit => matches!(kind, NodeKind::Image(_)),
+        _ => true,
+    }
+}
+
+/// Vrai si une propriété de placement est permise sous un hôte de ce type de conteneur
+/// (`None` : hôte qui n'est pas un conteneur, ou racine du rendu).
+fn placement_allowed(prop: StyleProp, host: Option<ContainerKind>) -> bool {
+    match prop {
+        StyleProp::ColSpan => host == Some(ContainerKind::Grid),
+        StyleProp::Grow | StyleProp::Shrink => host == Some(ContainerKind::Stack),
+        StyleProp::AlignSelf | StyleProp::Order => {
+            matches!(host, Some(ContainerKind::Stack | ContainerKind::Grid))
+        }
+        _ => true,
+    }
+}
+
+/// Vrai si une propriété de style est permise sur ce nœud, sous chacun de ses hôtes au rendu
+/// (voir [`rendered_hosts`]) ; un nœud jamais rendu n'impose aucune contrainte de placement.
+fn style_prop_allowed(doc: &Document, prop: StyleProp, node: &Node) -> bool {
+    own_prop_allowed(prop, &node.kind)
+        && (!PARENT_PROPS.contains(&prop)
+            || rendered_hosts(doc, &node.id)
+                .into_iter()
+                .all(|host| placement_allowed(prop, host)))
+}
+
+/// Conteneurs qui accueillent un nœud au rendu, un par contexte de rendu possible. Les instances
+/// et les slots ne produisent pas d'élément : le contenu d'une instance est rendu à la place du
+/// slot qu'il cible dans le composant, une racine de composant à la place de chacune de ses
+/// instances, une racine de page à la place du slot `page` de son layout. `None` : hôte qui
+/// n'est pas un conteneur, ou racine du rendu. Liste vide : nœud jamais rendu (slot introuvable,
+/// composant sans instance, composant récursif) ou contextes trop nombreux pour être parcourus.
+fn rendered_hosts(doc: &Document, id: &NodeId) -> Vec<Option<ContainerKind>> {
+    // Des composants récursifs qui se transmettent des slots multiplient les contextes : au-delà
+    // de ce budget, les hôtes sont tenus pour inconnus.
+    let budget = 8 * (doc.nodes.len() + 1);
+    let mut hosts = Vec::new();
+    // (nœud, instances développées autour de lui, de la plus externe à la plus interne)
+    let mut pending: Vec<(NodeId, Vec<NodeId>)> = vec![(id.clone(), Vec::new())];
+    let mut visited = BTreeSet::new();
+    while let Some((current, chain)) = pending.pop() {
+        if !visited.insert((current.clone(), chain.clone())) {
+            continue;
+        }
+        if visited.len() > budget {
+            return Vec::new();
+        }
+        let Some(node) = doc.node(&current) else { continue };
+        if let Some(parent) = &node.parent {
+            let Some(parent) = doc.node(parent) else { continue };
+            match &parent.kind {
+                // Une pile plus longue que le nombre de composants trahit une récursion.
+                NodeKind::ComponentInstance(props) if chain.len() < doc.components.len() => {
+                    let Some(component) = doc.component(&props.component) else {
+                        continue;
+                    };
+                    let target = node.meta.slot.as_deref().unwrap_or(DEFAULT_SLOT);
+                    let mut inner = chain.clone();
+                    inner.push(parent.id.clone());
+                    for slot in doc.subtree(&component.root) {
+                        if matches!(doc.node(&slot).map(|n| &n.kind), Some(NodeKind::Slot(s)) if s.name == target) {
+                            pending.push((slot, inner.clone()));
+                        }
+                    }
+                }
+                NodeKind::ComponentInstance(_) => {}
+                kind => hosts.push(kind.container().map(|(k, _)| k)),
+            }
+            continue;
+        }
+        // Racine du composant d'une instance développée : l'instance tient sa place.
+        if let Some((instance, outer)) = chain.split_last() {
+            pending.push((instance.clone(), outer.to_vec()));
+            continue;
+        }
+        match doc.owner_of(&current) {
+            Some(Owner::Component(component)) => {
+                pending.extend(doc.instances_of(&component).into_iter().map(|i| (i, Vec::new())));
+            }
+            Some(Owner::Page(page)) => {
+                let layout = doc
+                    .page(&page)
+                    .and_then(|p| p.layout.as_ref())
+                    .and_then(|l| doc.layout(l));
+                match layout {
+                    Some(layout) => {
+                        for slot in doc.subtree(&layout.root) {
+                            if matches!(doc.node(&slot).map(|n| &n.kind), Some(NodeKind::Slot(s)) if s.name == PAGE_SLOT)
+                            {
+                                pending.push((slot, Vec::new()));
+                            }
+                        }
+                    }
+                    None => hosts.push(None),
+                }
+            }
+            Some(Owner::Layout(_)) => hosts.push(None),
+            None => {}
+        }
+    }
+    hosts
+}
+
+/// Nœud référencé par un autre du même arbre : cible d'une action de bouton ou champ d'une
+/// étiquette.
+fn node_reference(kind: &NodeKind) -> Option<&NodeId> {
+    match kind {
+        NodeKind::Text(TextProps {
+            role: TextRole::Label {
+                for_input: Some(target),
+            },
+            ..
+        })
+        | NodeKind::Button(ButtonProps {
+            action: Some(Action::ToggleVisibility { target }),
+            ..
+        }) => Some(target),
+        _ => None,
+    }
+}
+
+/// Noms des slots d'un composant (y compris ceux transmis à une instance imbriquée), comme la
+/// validation les lit.
+fn component_slots(doc: &Document, component: &Component) -> BTreeSet<String> {
+    doc.subtree(&component.root)
+        .iter()
+        .filter_map(|n| match &doc.node(n)?.kind {
+            NodeKind::Slot(slot) => Some(slot.name.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Références de couleur posées par un patch de valeur.
+fn patch_color_refs(patch: &ResponsiveValuePatch) -> Vec<&ColorRef> {
+    match patch {
+        ResponsiveValuePatch::Color(p) => p.values(),
+        ResponsiveValuePatch::Background(p) => p.values().into_iter().flat_map(Background::colors).collect(),
+        ResponsiveValuePatch::Ring(p) => p.values().into_iter().map(|ring| &ring.color).collect(),
+        _ => Vec::new(),
+    }
+}
 
 fn is_pascal_case(name: &str) -> bool {
     name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_alphanumeric())
@@ -120,6 +297,16 @@ fn write_field(node: &mut Node, field: BindableField, value: &PropValue) {
         (BindableField::Label, PropValue::Text(label), NodeKind::Button(props)) => props.label = Some(label.clone()),
         (BindableField::Label, PropValue::Text(label), NodeKind::Link(props)) => props.label = Some(label.clone()),
         (BindableField::Visible, PropValue::Bool(false), _) => node.visibility = Some(Responsive::new(false)),
+        // Un nœud masqué partout redevient visible ; une visibilité responsive qui l'affiche
+        // déjà à un breakpoint est conservée (même lecture que `BindableField::read`).
+        (BindableField::Visible, PropValue::Bool(true), _)
+            if node
+                .visibility
+                .as_ref()
+                .is_some_and(|v| v.values().all(|visible| !*visible)) =>
+        {
+            node.visibility = None;
+        }
         _ => {}
     }
 }
@@ -299,6 +486,8 @@ impl<'a> Lowering<'a> {
                     .doc
                     .index_in_parent(&id)
                     .ok_or_else(|| CommandError::RootNode(id.clone()))?;
+                // Les nouveaux nœuds sont écrits dans le parent : il doit lui aussi être sélectionné.
+                self.check_in_scope(command, &parent)?;
                 self.emit(Op::RemoveSubtree { root: id })?;
                 self.insert_specs(&parent, Some(index as u32), nodes)
             }
@@ -334,22 +523,22 @@ impl<'a> Lowering<'a> {
                     });
                 }
                 self.emit(Op::MoveNode {
-                    node: id,
+                    node: id.clone(),
                     parent,
                     index: *index,
                 })?;
-                Ok(())
+                self.fit_to_parent(&id)
             }
             Command::DuplicateNode { node } => {
                 let id = self.resolve(node)?;
                 self.check_in_scope(command, &id)?;
-                self.duplicate(&id)
+                self.duplicate(command, &id)
             }
             Command::WrapNodes { nodes, container } => self.wrap(command, nodes, container),
             Command::UnwrapNode { node } => {
                 let id = self.resolve(node)?;
                 self.check_in_scope(command, &id)?;
-                self.unwrap(&id)
+                self.unwrap(command, &id)
             }
             Command::ConvertContainer { node, to } => {
                 let id = self.resolve(node)?;
@@ -395,7 +584,7 @@ impl<'a> Lowering<'a> {
             Command::CreateComponent { node, name, props } => {
                 let id = self.resolve(node)?;
                 self.check_in_scope(command, &id)?;
-                self.create_component(&id, name, props)
+                self.create_component(command, &id, name, props)
             }
             Command::UpdateComponent {
                 component,
@@ -406,7 +595,7 @@ impl<'a> Lowering<'a> {
             Command::DetachInstance { node } => {
                 let id = self.resolve(node)?;
                 self.check_in_scope(command, &id)?;
-                self.detach_instance(&id)
+                self.detach_instance(command, &id)
             }
             Command::DeleteComponent { component } => {
                 let found = self
@@ -488,6 +677,9 @@ impl<'a> Lowering<'a> {
                     .page(page)
                     .cloned()
                     .ok_or_else(|| CommandError::EntityNotFound(format!("page `{page}`")))?;
+                if self.page_linked_from_elsewhere(page, &found.root) {
+                    return Err(CommandError::InUse(format!("page `{}`", found.name)));
+                }
                 self.emit(Op::RemovePage { id: page.clone() })?;
                 self.emit(Op::RemoveSubtree { root: found.root })?;
                 Ok(())
@@ -560,6 +752,95 @@ impl<'a> Lowering<'a> {
             .position(|l| &l.id == id)
             .map(|i| (i as u32, self.doc.layouts[i].clone()))
             .ok_or_else(|| CommandError::EntityNotFound(format!("layout `{id}`")))
+    }
+
+    /// Vrai si la page est la cible d'un lien hors de son propre arbre : nœud `Link`, défaut
+    /// d'une prop de composant ou surcharge d'instance (les liens de la page partent avec elle).
+    fn page_linked_from_elsewhere(&self, page: &PageId, page_root: &NodeId) -> bool {
+        let targets = |value: &PropValue| matches!(value, PropValue::Href(Href::Page { page: p, .. }) if p == page);
+        let outside = |id: &NodeId| !self.doc.is_within(id, page_root);
+        self.doc.links_to_page(page).iter().any(outside)
+            || self
+                .doc
+                .components
+                .iter()
+                .any(|c| c.props.iter().any(|p| targets(&p.default)))
+            || self.doc.nodes.values().any(|node| match &node.kind {
+                NodeKind::ComponentInstance(instance) => {
+                    outside(&node.id) && instance.overrides.iter().any(|o| targets(&o.value))
+                }
+                _ => false,
+            })
+    }
+
+    /// L'IA ne crée pas de `RawCode`, pas plus par copie (duplication, détachement) que par
+    /// insertion (ADR 0001 § 14.11).
+    fn check_raw_code_copy(&self, copied: &[NodeId]) -> Result<(), CommandError> {
+        let has_raw_code = copied
+            .iter()
+            .any(|id| matches!(self.doc.node(id).map(|n| &n.kind), Some(NodeKind::RawCode(_))));
+        if self.origin.is_ai() && has_raw_code {
+            return Err(CommandError::Forbidden("RawCode creation".to_owned()));
+        }
+        Ok(())
+    }
+
+    /// Pose le slot ciblé par un nœud (enfant d'instance).
+    fn set_slot(&mut self, id: &NodeId, slot: Option<String>) -> Result<(), CommandError> {
+        let meta = self.node(id)?.meta.clone();
+        if meta.slot != slot {
+            self.emit(Op::SetMeta {
+                node: id.clone(),
+                meta: NodeMeta { slot, ..meta },
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Retire d'un nœud celles des propriétés `props` que son type ou ses hôtes au rendu
+    /// n'autorisent pas.
+    fn drop_disallowed_style(&mut self, id: &NodeId, props: &[StyleProp]) -> Result<(), CommandError> {
+        let node = self.node(id)?;
+        let dropped: Vec<StyleProp> = props
+            .iter()
+            .copied()
+            .filter(|prop| node.style.get(*prop).is_ok_and(|v| v.is_some()))
+            .filter(|prop| !style_prop_allowed(self.doc, *prop, node))
+            .collect();
+        for prop in dropped {
+            self.apply_style(id, None, vec![(prop, PropChange::Remove)])?;
+        }
+        Ok(())
+    }
+
+    /// Adapte un nœud déplacé à son nouveau parent : slot ciblé effacé hors d'une instance, ou
+    /// ramené au slot par défaut quand le composant de l'instance n'a pas ce slot ; puis
+    /// propriétés de placement retirées si l'hôte au rendu (le parent, ou pour le contenu d'une
+    /// instance le parent du slot ciblé) ne les autorise pas.
+    fn fit_to_parent(&mut self, id: &NodeId) -> Result<(), CommandError> {
+        let node = self.node(id)?;
+        let instance = node
+            .parent
+            .as_ref()
+            .and_then(|p| self.doc.node(p))
+            .and_then(|p| match &p.kind {
+                NodeKind::ComponentInstance(props) => Some(props.component.clone()),
+                _ => None,
+            });
+        match instance {
+            None => self.set_slot(id, None)?,
+            Some(component) => {
+                let slot = node.meta.slot.clone();
+                let known = match (&slot, self.doc.component(&component)) {
+                    (Some(name), Some(component)) => component_slots(self.doc, component).contains(name),
+                    _ => true,
+                };
+                if !known {
+                    self.set_slot(id, None)?;
+                }
+            }
+        }
+        self.drop_disallowed_style(id, &PARENT_PROPS)
     }
 
     // ---------------------------------------------------------------- création de nœuds
@@ -1014,12 +1295,15 @@ impl<'a> Lowering<'a> {
 
     // ---------------------------------------------------------------- structure
 
-    fn duplicate(&mut self, id: &NodeId) -> Result<(), CommandError> {
+    fn duplicate(&mut self, command: &Command, id: &NodeId) -> Result<(), CommandError> {
         let (parent, index) = self
             .doc
             .index_in_parent(id)
             .ok_or_else(|| CommandError::RootNode(id.clone()))?;
+        // La copie est insérée dans le parent : il doit lui aussi être sélectionné.
+        self.check_in_scope(command, &parent)?;
         let subtree = self.doc.subtree(id);
+        self.check_raw_code_copy(&subtree)?;
         let mut reserved = BTreeSet::new();
         let mut map = BTreeMap::new();
         for old in &subtree {
@@ -1066,6 +1350,8 @@ impl<'a> Lowering<'a> {
             ));
         }
         let parent = parent.ok_or_else(|| CommandError::InvalidCommand("no node to wrap".to_owned()))?;
+        // Le conteneur est inséré dans le parent : il doit lui aussi être sélectionné.
+        self.check_in_scope(command, &parent)?;
         let container_id = self.new_node_id(&BTreeSet::new());
         let props = ContainerProps {
             role: spec.role.clone().unwrap_or_default(),
@@ -1076,10 +1362,46 @@ impl<'a> Lowering<'a> {
             NodeKind::from_container(spec.kind, props),
         );
         container.meta.source = self.origin.node_source();
+        if matches!(self.node(&parent)?.kind, NodeKind::ComponentInstance(_)) {
+            // Dans une instance, le conteneur reprend le slot ciblé par les nœuds enveloppés.
+            let mut slots = BTreeSet::new();
+            for (_, id) in &positions {
+                let slot = self.node(id)?.meta.slot.clone();
+                slots.insert(slot.unwrap_or_else(|| DEFAULT_SLOT.to_owned()));
+            }
+            if slots.len() > 1 {
+                return Err(CommandError::InvalidCommand(
+                    "wrapped nodes target different slots".to_owned(),
+                ));
+            }
+            container.meta.slot = slots.into_iter().find(|slot| slot != DEFAULT_SLOT);
+        }
         if let Some(patch) = &spec.meta {
             let (meta, a11y) = apply_meta_patch(&container.meta, &container.a11y, patch);
             container.meta = meta;
             container.a11y = a11y;
+        }
+        // Le conteneur prend la place des nœuds enveloppés, pour que la mise en page ne bouge
+        // pas (comme `create_component`, ADR § 14.9) : un nœud seul lui cède tout son placement ;
+        // plusieurs nœuds lui cèdent le placement qu'ils partagent, marges exceptées (elles
+        // espacent les nœuds entre eux).
+        let single = positions.len() == 1;
+        let shared: &[StyleProp] = if single { &PLACEMENT_PROPS } else { &PARENT_PROPS };
+        for prop in shared.iter().copied() {
+            let mut values = Vec::with_capacity(positions.len());
+            for (_, id) in &positions {
+                values.push(self.node(id)?.style.get(prop)?);
+            }
+            let Some(Some(value)) = values.first().cloned() else {
+                continue;
+            };
+            if values.iter().any(|v| v.as_ref() != Some(&value)) {
+                continue;
+            }
+            container.style.set(prop, Some(value))?;
+            if single {
+                self.apply_style(&positions[0].1, None, vec![(prop, PropChange::Remove)])?;
+            }
         }
         self.emit(Op::InsertSubtree {
             parent: Some(parent),
@@ -1092,6 +1414,7 @@ impl<'a> Lowering<'a> {
                 parent: container_id.clone(),
                 index: k as u32,
             })?;
+            self.fit_to_parent(id)?;
         }
         if let Some(name) = &spec.r#ref {
             self.register_ref(name, &container_id)?;
@@ -1104,7 +1427,7 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
-    fn unwrap(&mut self, id: &NodeId) -> Result<(), CommandError> {
+    fn unwrap(&mut self, command: &Command, id: &NodeId) -> Result<(), CommandError> {
         let node = self.node(id)?.clone();
         if node.kind.container().is_none() {
             return Err(CommandError::KindMismatch {
@@ -1116,12 +1439,20 @@ impl<'a> Lowering<'a> {
             .doc
             .index_in_parent(id)
             .ok_or_else(|| CommandError::RootNode(id.clone()))?;
+        // Les enfants sont déplacés dans le parent : il doit lui aussi être sélectionné.
+        self.check_in_scope(command, &parent)?;
+        let into_instance = matches!(self.node(&parent)?.kind, NodeKind::ComponentInstance(_));
         for (k, child) in node.children.iter().enumerate() {
             self.emit(Op::MoveNode {
                 node: child.clone(),
                 parent: parent.clone(),
                 index: (index + k) as u32,
             })?;
+            if into_instance {
+                // Les enfants reprennent le slot ciblé par le conteneur retiré.
+                self.set_slot(child, node.meta.slot.clone())?;
+            }
+            self.fit_to_parent(child)?;
         }
         self.emit(Op::RemoveSubtree { root: id.clone() })?;
         Ok(())
@@ -1140,33 +1471,9 @@ impl<'a> Lowering<'a> {
             node: id.clone(),
             kind: NodeKind::from_container(to, props.clone()),
         })?;
-        let mut dropped = Vec::new();
-        if to != ContainerKind::Stack {
-            dropped.extend([StyleProp::Direction, StyleProp::Wrap]);
-        }
-        if to != ContainerKind::Grid {
-            dropped.push(StyleProp::Columns);
-        }
-        if to == ContainerKind::Box {
-            dropped.extend([StyleProp::Gap, StyleProp::Align, StyleProp::Justify]);
-        }
-        for prop in dropped {
-            self.apply_style(id, None, vec![(prop, PropChange::Remove)])?;
-        }
-        let mut child_props = Vec::new();
-        if to != ContainerKind::Grid {
-            child_props.push(StyleProp::ColSpan);
-        }
-        if to != ContainerKind::Stack {
-            child_props.extend([StyleProp::Grow, StyleProp::Shrink]);
-        }
-        if to == ContainerKind::Box {
-            child_props.extend([StyleProp::AlignSelf, StyleProp::Order]);
-        }
+        self.drop_disallowed_style(id, &CONTAINER_PROPS)?;
         for child in &node.children {
-            for prop in &child_props {
-                self.apply_style(child, None, vec![(*prop, PropChange::Remove)])?;
-            }
+            self.drop_disallowed_style(child, &PARENT_PROPS)?;
         }
         self.apply_defaults(id)
     }
@@ -1386,17 +1693,80 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
-    fn create_component(&mut self, id: &NodeId, name: &str, specs: &[ComponentPropSpec]) -> Result<(), CommandError> {
+    /// Refuse d'extraire un sous-arbre dont l'arbre d'origine dépend : slots du layout ou du
+    /// composant englobant, références (action de bouton, champ d'étiquette) qui franchissent la
+    /// frontière du sous-arbre dans un sens ou dans l'autre, cibles des props ou des variantes
+    /// du composant englobant.
+    fn check_extractable(&self, id: &NodeId) -> Result<(), CommandError> {
+        let subtree: BTreeSet<NodeId> = self.doc.subtree(id).into_iter().collect();
+        let owner = self.doc.owner_of(id);
+        if matches!(owner, Some(Owner::Layout(_) | Owner::Component(_)))
+            && let Some(slot) = subtree
+                .iter()
+                .find(|n| matches!(self.doc.node(n).map(|n| &n.kind), Some(NodeKind::Slot(_))))
+        {
+            return Err(CommandError::InvalidCommand(format!(
+                "slot `{slot}` belongs to the enclosing layout or component and cannot be moved into a new component"
+            )));
+        }
+        // Le sous-arbre change d'arbre : une référence entre lui et le reste de son arbre
+        // d'origine ne serait plus résolue (cible hors de l'arbre).
+        let tree: BTreeSet<NodeId> = self.doc.subtree(&self.doc.tree_root(id)).into_iter().collect();
+        for source in &tree {
+            let Some(target) = self.doc.node(source).and_then(|n| node_reference(&n.kind)) else {
+                continue;
+            };
+            if tree.contains(target) && subtree.contains(source) != subtree.contains(target) {
+                return Err(CommandError::InvalidCommand(format!(
+                    "node `{source}` references `{target}` across the boundary of the new component"
+                )));
+            }
+        }
+        let Some(Owner::Component(owner)) = owner else {
+            return Ok(());
+        };
+        let Some(component) = self.doc.component(&owner) else {
+            return Ok(());
+        };
+        if let Some(prop) = component.props.iter().find(|p| subtree.contains(&p.binding.node)) {
+            return Err(CommandError::InvalidCommand(format!(
+                "node `{}` is bound to prop `{}` of component `{}`",
+                prop.binding.node, prop.name, component.name
+            )));
+        }
+        for axis in &component.variants {
+            for option in &axis.options {
+                if let Some(over) = option.overrides.iter().find(|o| subtree.contains(&o.node)) {
+                    return Err(CommandError::InvalidCommand(format!(
+                        "node `{}` is targeted by variant `{}={}` of component `{}`",
+                        over.node, axis.name, option.name, component.name
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn create_component(
+        &mut self,
+        command: &Command,
+        id: &NodeId,
+        name: &str,
+        specs: &[ComponentPropSpec],
+    ) -> Result<(), CommandError> {
         self.check_component_name(name, None)?;
         let (parent, index) = self
             .doc
             .index_in_parent(id)
             .ok_or_else(|| CommandError::RootNode(id.clone()))?;
+        // L'instance prend la place du nœud dans le parent : il doit lui aussi être sélectionné.
+        self.check_in_scope(command, &parent)?;
         if matches!(self.node(id)?.kind, NodeKind::Slot(_)) {
             return Err(CommandError::InvalidCommand(
                 "a slot cannot become a component".to_owned(),
             ));
         }
+        self.check_extractable(id)?;
         let props = self.component_props(id, specs)?;
         let component_id = {
             let doc = &*self.doc;
@@ -1428,6 +1798,9 @@ impl<'a> Lowering<'a> {
                 })?;
             }
         }
+        // Le slot ciblé dans une instance parente est aussi du placement.
+        instance.meta.slot = original.meta.slot.clone();
+        self.set_slot(id, None)?;
 
         let removed = self.emit(Op::RemoveSubtree { root: id.clone() })?;
         let Op::InsertSubtree { mut nodes, .. } = removed else {
@@ -1458,6 +1831,56 @@ impl<'a> Lowering<'a> {
         })?;
         self.out.components.push(component_id);
         self.out.inserted.push(instance_id);
+        Ok(())
+    }
+
+    /// Une surcharge de variante obéit aux règles du style de son nœud cible : tokens existants,
+    /// propriétés permises pour son type et ses hôtes au rendu, `none` réservé aux tailles max.
+    fn check_variant_override(&self, over: &VariantOverride) -> Result<(), CommandError> {
+        let node = self.node(&over.node)?;
+        let mut entries = over.style.entries();
+        for state in InteractionState::ALL {
+            if let Some(patch) = over.states.get(state) {
+                entries.extend(patch.entries());
+            }
+        }
+        for (prop, change) in entries {
+            let PropChange::Merge(patch) = change else {
+                continue;
+            };
+            if !style_prop_allowed(self.doc, prop, node) {
+                return Err(CommandError::InvalidCommand(format!(
+                    "`{}` is not allowed on {} `{}`",
+                    prop.name(),
+                    node.kind.type_name(),
+                    over.node
+                )));
+            }
+            match &patch {
+                ResponsiveValuePatch::Size(sizes)
+                    if !matches!(prop, StyleProp::MaxWidth | StyleProp::MaxHeight)
+                        && sizes.values().into_iter().any(|size| *size == Size::None) =>
+                {
+                    return Err(CommandError::InvalidCommand(format!(
+                        "`none` is only valid for max sizes, not `{}`",
+                        prop.name()
+                    )));
+                }
+                ResponsiveValuePatch::Token(fonts) => {
+                    if let Some(name) = fonts.values().into_iter().find(|f| self.doc.tokens.font(f).is_none()) {
+                        return Err(CommandError::EntityNotFound(format!("font token `{name}`")));
+                    }
+                }
+                _ => {}
+            }
+            if let Some(name) = patch_color_refs(&patch)
+                .into_iter()
+                .filter_map(ColorRef::token_name)
+                .find(|name| self.doc.tokens.color(name).is_none())
+            {
+                return Err(CommandError::EntityNotFound(format!("color token `{name}`")));
+            }
+        }
         Ok(())
     }
 
@@ -1512,6 +1935,7 @@ impl<'a> Lowering<'a> {
                                 prop.name()
                             )));
                         }
+                        self.check_variant_override(over)?;
                     }
                 }
                 if !option_names.contains(&axis.default) {
@@ -1554,7 +1978,7 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
-    fn detach_instance(&mut self, id: &NodeId) -> Result<(), CommandError> {
+    fn detach_instance(&mut self, command: &Command, id: &NodeId) -> Result<(), CommandError> {
         let instance = self.node(id)?.clone();
         let NodeKind::ComponentInstance(props) = &instance.kind else {
             return Err(CommandError::KindMismatch {
@@ -1566,6 +1990,8 @@ impl<'a> Lowering<'a> {
             .doc
             .index_in_parent(id)
             .ok_or_else(|| CommandError::RootNode(id.clone()))?;
+        // La copie prend la place de l'instance dans le parent : il doit lui aussi être sélectionné.
+        self.check_in_scope(command, &parent)?;
         let component = self
             .doc
             .component(&props.component)
@@ -1578,6 +2004,7 @@ impl<'a> Lowering<'a> {
         }
 
         let subtree = self.doc.subtree(&component.root);
+        self.check_raw_code_copy(&subtree)?;
         let mut reserved = BTreeSet::new();
         let mut map = BTreeMap::new();
         for old in &subtree {
@@ -1600,7 +2027,8 @@ impl<'a> Lowering<'a> {
                 write_field(node, prop.binding.field, value);
             }
         }
-        // Style, visibilité et nom de l'instance reportés sur la racine.
+        // Style, visibilité, méta (nom, ancre, verrou, slot ciblé) et a11y de l'instance
+        // reportés sur la racine.
         let root = &mut nodes[0];
         for (prop, value) in instance.style.entries() {
             root.style.set(prop, Some(value))?;
@@ -1618,6 +2046,45 @@ impl<'a> Lowering<'a> {
         }
         if instance.meta.anchor.is_some() {
             root.meta.anchor = instance.meta.anchor.clone();
+        }
+        if instance.meta.locked {
+            root.meta.locked = true;
+        }
+        root.meta.slot = instance.meta.slot.clone();
+        if instance.a11y.label.is_some() {
+            root.a11y.label = instance.a11y.label.clone();
+        }
+        if instance.a11y.hidden {
+            root.a11y.hidden = true;
+        }
+        // Plateforme : la copie n'est rendue que là où l'instance et la racine l'étaient.
+        root.platform = match (instance.platform, root.platform) {
+            (PlatformScope::All, own) => own,
+            (outer, own) if own.is_all() || own == outer => outer,
+            (outer, own) => {
+                return Err(CommandError::InvalidCommand(format!(
+                    "instance `{id}` is limited to {outer:?} but its component root to {own:?}: the copy would render nowhere"
+                )));
+            }
+        };
+        // Échappatoires web de l'instance ajoutées à celles de la racine (l'attribut de
+        // l'instance l'emporte à nom égal).
+        if let Some(web) = &instance.platform_overrides.web {
+            let merged = root.platform_overrides.web.get_or_insert_with(WebOverrides::default);
+            for class in &web.extra_classes {
+                if !merged.extra_classes.contains(class) {
+                    merged.extra_classes.push(class.clone());
+                }
+            }
+            for attribute in &web.extra_attributes {
+                match merged.extra_attributes.iter_mut().find(|a| a.name == attribute.name) {
+                    Some(existing) => existing.value = attribute.value.clone(),
+                    None => merged.extra_attributes.push(attribute.clone()),
+                }
+            }
+            if merged.is_empty() {
+                root.platform_overrides.web = None;
+            }
         }
         let root_id = root.id.clone();
         let slots: Vec<(NodeId, String)> = nodes
