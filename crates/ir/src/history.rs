@@ -9,9 +9,10 @@ use ts_rs::TS;
 use crate::command::{Command, CommandError, LowerOutput, Lowering};
 use crate::document::Document;
 use crate::id::{ComponentId, IdGen, LayoutId, NodeId, PageId};
-use crate::op::{ChangeSet, Op};
+use crate::op::{ChangeSet, NodeField, Op, OpAccess, OpKey};
 use crate::scope::{Origin, Scope};
-use crate::validate::{Issue, IssueKey, validate};
+use crate::style::responsive::Breakpoint;
+use crate::validate::{Issue, IssueCode, validate};
 
 /// Lot de commandes appliqué atomiquement (une entrée d'undo).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -82,45 +83,243 @@ struct Entry {
     inverse: Vec<Op>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Unité d'un brouillon : une commande, ses ops et le contexte de son abaissement (périmètre,
+/// générateur d'ids et références locales d'avant la commande), qui permet de l'abaisser de
+/// nouveau à l'acceptation partielle.
+#[derive(Debug, Clone)]
 struct DraftUnit {
     id: ChangeUnitId,
     label: String,
+    command: Command,
+    scope: Scope,
+    ids: IdGen,
+    refs: BTreeMap<String, NodeId>,
     ops: Vec<Op>,
     inverse: Vec<Op>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 struct Draft {
     run_id: String,
     label: Option<String>,
     refs: BTreeMap<String, NodeId>,
     units: Vec<DraftUnit>,
-    base_errors: BTreeSet<IssueKey>,
+    base_errors: ErrorCounts,
+}
+
+/// Identité d'une erreur : code, nœud, breakpoint et message privé des valeurs qu'un brouillon
+/// peut changer sans créer de problème nouveau (voir [`stable_message`]).
+type ErrorKey = (IssueCode, Option<NodeId>, Option<Breakpoint>, String);
+
+/// Nombre d'erreurs d'un document par identité.
+type ErrorCounts = BTreeMap<ErrorKey, usize>;
+
+/// Mots qui, dans un message de validation, précèdent le nom (renommable) ou l'id d'une page,
+/// d'un layout ou d'un composant cité entre accents graves (`page `Accueil``,
+/// `layout name `site``).
+const RENAMEABLE: [&str; 4] = ["page", "layout", "component", "name"];
+
+fn is_entity_id(text: &str) -> bool {
+    text.parse::<PageId>().is_ok() || text.parse::<LayoutId>().is_ok() || text.parse::<ComponentId>().is_ok()
+}
+
+/// Message réduit à ce qui distingue deux erreurs d'un même emplacement. Les noms de page, de
+/// layout et de composant (renommables) et les nombres hors accents graves (ratio de contraste,
+/// niveaux de titre, décomptes) sont masqués ; restent les termes qui identifient le problème :
+/// token, prop, ancre, id cité, mode de contraste.
+fn stable_message(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut previous_word = "";
+    // Les segments impairs sont entre accents graves.
+    for (index, part) in message.split('`').enumerate() {
+        if index % 2 == 1 {
+            out.push('`');
+            if !RENAMEABLE.contains(&previous_word) || is_entity_id(part) {
+                out.push_str(part);
+            }
+            out.push('`');
+            continue;
+        }
+        previous_word = if part.ends_with(' ') {
+            part.split_whitespace().last().unwrap_or_default()
+        } else {
+            ""
+        };
+        let mut in_number = false;
+        for c in part.chars() {
+            if c.is_ascii_digit() || (in_number && c == '.') {
+                if !in_number {
+                    out.push('#');
+                }
+                in_number = true;
+            } else {
+                in_number = false;
+                out.push(c);
+            }
+        }
+    }
+    out
+}
+
+fn error_key(issue: &Issue) -> ErrorKey {
+    (
+        issue.code,
+        issue.node.clone(),
+        issue.breakpoint,
+        stable_message(&issue.message),
+    )
+}
+
+fn error_counts(issues: &[Issue]) -> ErrorCounts {
+    let mut counts = ErrorCounts::new();
+    for issue in issues.iter().filter(|i| i.is_error()) {
+        *counts.entry(error_key(issue)).or_default() += 1;
+    }
+    counts
+}
+
+/// Erreurs introduites par rapport à `base` : chaque erreur consomme une erreur de même identité
+/// d'avant le brouillon ; celles qui n'en trouvent plus sont nouvelles. Corriger une erreur et en
+/// introduire une autre au même emplacement laisse donc la seconde visible.
+fn introduced_errors(base: &ErrorCounts, issues: Vec<Issue>) -> Vec<Issue> {
+    let mut remaining = base.clone();
+    issues
+        .into_iter()
+        .filter(|issue| {
+            if !issue.is_error() {
+                return false;
+            }
+            match remaining.get_mut(&error_key(issue)) {
+                Some(count) if *count > 0 => {
+                    *count -= 1;
+                    false
+                }
+                _ => true,
+            }
+        })
+        .collect()
+}
+
+/// Données écrites par les unités rejetées d'un brouillon, avec la première unité qui les écrit.
+#[derive(Default)]
+struct RejectedWrites {
+    keys: BTreeMap<OpKey, usize>,
+    /// Nœuds dont au moins un champ est écrit.
+    node_fields: BTreeMap<NodeId, usize>,
+}
+
+impl RejectedWrites {
+    fn record(&mut self, key: OpKey, unit: usize) {
+        if let OpKey::Field(node, _) = &key {
+            self.node_fields.entry(node.clone()).or_insert(unit);
+        }
+        self.keys.entry(key).or_insert(unit);
+    }
+
+    /// Unité rejetée dont dépend une op : elle écrit une donnée que l'op remplace (la valeur
+    /// enregistrée par l'op contient alors sa modification) ou crée, supprime ou modifie une
+    /// donnée que l'op suppose.
+    fn conflict(&self, access: &OpAccess) -> Option<usize> {
+        let written = access.writes.iter().find_map(|key| {
+            self.keys.get(key).copied().or_else(|| match key {
+                // Un nœud inséré avec toutes ses valeurs recouvre chacun de ses champs, et
+                // réciproquement.
+                OpKey::Field(node, NodeField::All) => self.node_fields.get(node).copied(),
+                OpKey::Field(node, _) => self.keys.get(&OpKey::Field(node.clone(), NodeField::All)).copied(),
+                _ => None,
+            })
+        });
+        written.or_else(|| access.reads.iter().find_map(|key| self.keys.get(key).copied()))
+    }
+}
+
+/// Refuse une acceptation partielle dont une unité retenue dépend d'une unité rejetée plus
+/// ancienne. Les ops enregistrent des valeurs entières (style d'une propriété, tokens, page…)
+/// calculées sur l'état du brouillon : rejouées sans l'unité rejetée, elles réintroduiraient sa
+/// modification ou viseraient une entité (nœud, page, token…) qu'elle seule crée. Ce contrôle
+/// nomme l'unité rejetée en cause ; [`replay_units`] couvre ensuite ce que l'abaissement lit sans
+/// l'écrire. L'ordre des enfants n'est pas une dépendance.
+fn check_unit_dependencies(units: &[DraftUnit], selected: &BTreeSet<ChangeUnitId>) -> Result<(), CommandError> {
+    let mut rejected = RejectedWrites::default();
+    for (index, unit) in units.iter().enumerate() {
+        let accesses = unit
+            .ops
+            .iter()
+            .zip(&unit.inverse)
+            .map(|(op, inverse)| op.access(inverse));
+        if selected.contains(&unit.id) {
+            for access in accesses {
+                if let Some(culprit) = rejected.conflict(&access) {
+                    let culprit = &units[culprit];
+                    return Err(CommandError::UnitDependency(format!(
+                        "unit {} (`{}`) builds on rejected unit {} (`{}`)",
+                        unit.id.0, unit.label, culprit.id.0, culprit.label
+                    )));
+                }
+            }
+        } else {
+            for key in accesses.flat_map(|access| access.writes) {
+                rejected.record(key, index);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Applique des ops dans l'ordre ; en cas d'échec, annule celles déjà appliquées.
 /// Retourne les inverses (dans l'ordre d'application).
-fn apply_all(doc: &mut Document, ops: &[Op], clamp: bool) -> Result<(Vec<Op>, Vec<Op>), CommandError> {
-    let mut applied = Vec::with_capacity(ops.len());
+fn apply_all(doc: &mut Document, ops: &[Op]) -> Result<Vec<Op>, CommandError> {
     let mut inverse = Vec::with_capacity(ops.len());
     for op in ops {
-        let mut op = op.clone();
-        if clamp {
-            op.clamp_indices(doc);
-        }
         match op.apply(doc) {
-            Ok(inv) => {
-                applied.push(op);
-                inverse.push(inv);
-            }
+            Ok(inv) => inverse.push(inv),
             Err(error) => {
                 undo_all(doc, &inverse);
                 return Err(error.into());
             }
         }
     }
-    Ok((applied, inverse))
+    Ok(inverse)
+}
+
+/// Rejoue les unités choisies, dans l'ordre, sur le document d'avant le brouillon : chaque
+/// commande est abaissée de nouveau dans le contexte de son premier abaissement et doit redonner
+/// les ops du brouillon, indices de position mis à part. Sinon, elle dépendait de ce qu'une unité
+/// rejetée a changé et que ses ops ne nomment pas : valeurs copiées (`duplicate_node`,
+/// `detach_instance`), enfants d'un nœud retiré (`unwrap_node`, `create_component`), valeur
+/// neutre héritée d'un ancêtre… L'acceptation échoue alors (`UNIT_DEPENDENCY`) et le document
+/// revient à son état d'avant le brouillon. Retourne les ops appliquées et leurs inverses.
+fn replay_units(doc: &mut Document, origin: &Origin, units: &[&DraftUnit]) -> Result<(Vec<Op>, Vec<Op>), CommandError> {
+    let mut ops = Vec::new();
+    let mut inverse = Vec::new();
+    for unit in units {
+        let mut ids = unit.ids.clone();
+        let mut refs = unit.refs.clone();
+        let mut lowering = Lowering::new(doc, &mut ids, &mut refs, &unit.scope, origin);
+        let failure = match lowering.lower(&unit.command) {
+            Ok(())
+                if lowering.ops.len() == unit.ops.len()
+                    && lowering
+                        .ops
+                        .iter()
+                        .zip(&unit.ops)
+                        .all(|(a, b)| a.same_except_position(b)) =>
+            {
+                ops.append(&mut lowering.ops);
+                inverse.append(&mut lowering.inverse);
+                continue;
+            }
+            Ok(()) => "its changes differ without the rejected units".to_owned(),
+            Err(error) => error.to_string(),
+        };
+        lowering.rollback();
+        undo_all(doc, &inverse);
+        return Err(CommandError::UnitDependency(format!(
+            "unit {} (`{}`) builds on a rejected unit: {failure}",
+            unit.id.0, unit.label
+        )));
+    }
+    Ok((ops, inverse))
 }
 
 /// Rejoue des inverses à rebours (sans échec possible sur un état cohérent).
@@ -129,10 +328,6 @@ fn undo_all(doc: &mut Document, inverse: &[Op]) {
         // Inverses d'ops appliquées avec succès sur cet état : leur application réussit.
         let _ = op.apply(doc);
     }
-}
-
-fn error_keys(issues: &[Issue]) -> BTreeSet<IssueKey> {
-    issues.iter().filter(|i| i.is_error()).map(Issue::key).collect()
 }
 
 /// Session d'édition d'un document.
@@ -200,7 +395,10 @@ impl Session {
         let mut ops = Vec::new();
         let mut inverse = Vec::new();
         let mut units = Vec::new();
+        let first_unit = self.draft.as_ref().map_or(0, |d| d.units.len());
         for (index, command) in tx.commands.iter().enumerate() {
+            // Contexte de l'abaissement, conservé pour rejouer la commande seule.
+            let context = in_draft.then(|| (self.ids.clone(), refs.clone()));
             let mut lowering = Lowering::new(&mut self.doc, &mut self.ids, &mut refs, &tx.scope, &tx.origin);
             if let Err(error) = lowering.lower(command) {
                 lowering.rollback();
@@ -219,7 +417,20 @@ impl Session {
             output.pages.extend(out.pages);
             output.layouts.extend(out.layouts);
             output.components.extend(out.components);
-            units.push((command.name().to_owned(), command_ops.clone(), command_inverse.clone()));
+            if let Some((ids, refs_before)) = context
+                && !command_ops.is_empty()
+            {
+                units.push(DraftUnit {
+                    id: ChangeUnitId((first_unit + units.len()) as u32),
+                    label: command.name().to_owned(),
+                    command: command.clone(),
+                    scope: tx.scope.clone(),
+                    ids,
+                    refs: refs_before,
+                    ops: command_ops.clone(),
+                    inverse: command_inverse.clone(),
+                });
+            }
             ops.extend(command_ops);
             inverse.extend(command_inverse);
         }
@@ -231,18 +442,7 @@ impl Session {
             if draft.label.is_none() {
                 draft.label = Some(tx.label.clone());
             }
-            for (label, unit_ops, unit_inverse) in units {
-                if unit_ops.is_empty() {
-                    continue;
-                }
-                let id = ChangeUnitId(draft.units.len() as u32);
-                draft.units.push(DraftUnit {
-                    id,
-                    label,
-                    ops: unit_ops,
-                    inverse: unit_inverse,
-                });
-            }
+            draft.units.extend(units);
         } else if !ops.is_empty() {
             match &mut self.gesture {
                 Some(gesture) => {
@@ -281,7 +481,7 @@ impl Session {
         self.end_gesture();
         let Some(entry) = self.undo.pop() else { return Ok(None) };
         let reversed: Vec<Op> = entry.inverse.iter().rev().cloned().collect();
-        if let Err(error) = apply_all(&mut self.doc, &reversed, false) {
+        if let Err(error) = apply_all(&mut self.doc, &reversed) {
             self.undo.push(entry);
             return Err(error);
         }
@@ -297,7 +497,7 @@ impl Session {
         }
         self.end_gesture();
         let Some(entry) = self.redo.pop() else { return Ok(None) };
-        if let Err(error) = apply_all(&mut self.doc, &entry.ops, false) {
+        if let Err(error) = apply_all(&mut self.doc, &entry.ops) {
             self.redo.push(entry);
             return Err(error);
         }
@@ -333,7 +533,7 @@ impl Session {
             return Err(CommandError::DraftInProgress);
         }
         self.end_gesture();
-        let base_errors = error_keys(&validate(&self.doc));
+        let base_errors = error_counts(&validate(&self.doc));
         self.draft = Some(Draft {
             run_id: run_id.to_owned(),
             label: None,
@@ -362,15 +562,13 @@ impl Session {
     }
 
     /// Erreurs introduites par rapport au document d'avant le brouillon.
-    fn new_errors(&self, base: &BTreeSet<IssueKey>) -> Vec<Issue> {
-        validate(&self.doc)
-            .into_iter()
-            .filter(|i| i.is_error() && !base.contains(&i.key()))
-            .collect()
+    fn new_errors(&self, base: &ErrorCounts) -> Vec<Issue> {
+        introduced_errors(base, validate(&self.doc))
     }
 
     /// Valide le brouillon en une seule entrée d'undo. Refusé (brouillon conservé) si le
-    /// résultat introduit des erreurs bloquantes.
+    /// résultat introduit des erreurs bloquantes, ou si une unité acceptée dépend d'une unité
+    /// rejetée (`UNIT_DEPENDENCY`).
     pub fn commit_draft(&mut self, accept: DraftAccept) -> Result<ChangeSet, CommandError> {
         let draft = self.draft.take().ok_or(CommandError::NoDraft)?;
         let all_ops: Vec<Op> = draft.units.iter().flat_map(|u| u.ops.iter().cloned()).collect();
@@ -379,20 +577,22 @@ impl Session {
             DraftAccept::All => (all_ops.clone(), all_inverse.clone()),
             DraftAccept::Units(selected) => {
                 let selected: BTreeSet<ChangeUnitId> = selected.iter().copied().collect();
+                if let Err(error) = check_unit_dependencies(&draft.units, &selected) {
+                    self.draft = Some(draft);
+                    return Err(error);
+                }
                 undo_all(&mut self.doc, &all_inverse);
-                let wanted: Vec<Op> = draft
-                    .units
-                    .iter()
-                    .filter(|u| selected.contains(&u.id))
-                    .flat_map(|u| u.ops.iter().cloned())
-                    .collect();
-                match apply_all(&mut self.doc, &wanted, true) {
+                let origin = Origin::Ai {
+                    run_id: draft.run_id.clone(),
+                };
+                let chosen: Vec<&DraftUnit> = draft.units.iter().filter(|u| selected.contains(&u.id)).collect();
+                match replay_units(&mut self.doc, &origin, &chosen) {
                     Ok(result) => result,
                     Err(error) => {
                         // Rétablit le brouillon complet.
-                        let _ = apply_all(&mut self.doc, &all_ops, false);
+                        let _ = apply_all(&mut self.doc, &all_ops);
                         self.draft = Some(draft);
-                        return Err(CommandError::UnitDependency(error.to_string()));
+                        return Err(error);
                     }
                 }
             }
@@ -401,7 +601,7 @@ impl Session {
         if !errors.is_empty() {
             if matches!(accept, DraftAccept::Units(_)) {
                 undo_all(&mut self.doc, &inverse);
-                let _ = apply_all(&mut self.doc, &all_ops, false);
+                let _ = apply_all(&mut self.doc, &all_ops);
             }
             self.draft = Some(draft);
             return Err(CommandError::ValidationFailed(errors));
@@ -438,5 +638,89 @@ impl Session {
     /// Problèmes du document courant.
     pub fn validate(&self) -> Vec<Issue> {
         validate(&self.doc)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn missing(what: &str) -> Issue {
+        Issue::error(IssueCode::InvalidReference, None, format!("{what} does not exist"))
+    }
+
+    #[test]
+    fn errors_are_compared_by_stable_identity() {
+        let node: NodeId = "n_0000000000".parse().unwrap();
+        let h1 = |page: &str| {
+            Issue::error(
+                IssueCode::A11yMultipleH1,
+                Some(&node),
+                format!("page `{page}` has more than one H1"),
+            )
+        };
+        let contrast = |ratio: &str, threshold: &str, mode: &str| {
+            Issue::error(
+                IssueCode::A11yContrast,
+                Some(&node),
+                format!("text contrast {ratio}:1 is below {threshold}:1 ({mode} mode, from md)"),
+            )
+            .at(Breakpoint::Md)
+        };
+
+        // Page renommée, ratio de contraste changé : mêmes erreurs.
+        let base = error_counts(&[h1("Accueil"), contrast("2.95", "4.5", "dark")]);
+        assert!(introduced_errors(&base, vec![h1("Home"), contrast("3.10", "3", "dark")]).is_empty());
+        // Même emplacement, autre mode de contraste : nouvelle erreur.
+        let light = contrast("2.95", "4.5", "light");
+        assert_eq!(introduced_errors(&base, vec![light.clone()]), vec![light]);
+
+        // Même emplacement, autre référence manquante : nouvelle erreur, même si celle d'avant
+        // est corrigée.
+        let base = error_counts(&[missing("favicon asset `a_0000000000`")]);
+        assert_eq!(
+            introduced_errors(&base, vec![missing("favicon asset `a_1111111111`")]),
+            vec![missing("favicon asset `a_1111111111`")]
+        );
+        // Un avertissement ne bloque jamais.
+        let warning = Issue::warning(IssueCode::InvalidReference, None, "root node `n` does not exist");
+        assert!(introduced_errors(&base, vec![missing("favicon asset `a_0000000000`"), warning]).is_empty());
+        // Une seconde erreur sans nœud de même code reste nouvelle.
+        let introduced = introduced_errors(
+            &base,
+            vec![
+                missing("favicon asset `a_0000000000`"),
+                missing("root node `n_0000000000`"),
+            ],
+        );
+        assert_eq!(introduced, vec![missing("root node `n_0000000000`")]);
+    }
+
+    #[test]
+    fn stable_messages_keep_identifiers_and_mask_names_and_measures() {
+        assert_eq!(
+            stable_message("anchor `contact` does not exist on page `À propos`"),
+            "anchor `contact` does not exist on page ``"
+        );
+        assert_eq!(
+            stable_message("component `Card` has no prop `title`"),
+            "component `` has no prop `title`"
+        );
+        assert_eq!(
+            stable_message("layout `site` must contain exactly one `page` slot (found 2)"),
+            "layout `` must contain exactly one `page` slot (found #)"
+        );
+        assert_eq!(
+            stable_message("color token `brand` does not exist"),
+            "color token `brand` does not exist"
+        );
+        assert_eq!(
+            stable_message("page `p_0000000000` does not exist"),
+            "page `p_0000000000` does not exist"
+        );
+        assert_eq!(
+            stable_message("`none` is only valid for max sizes, not `width`"),
+            "`none` is only valid for max sizes, not `width`"
+        );
     }
 }

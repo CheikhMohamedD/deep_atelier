@@ -3,17 +3,21 @@
 //! Les ops ne connaissent que la cohérence structurelle (ids, indices, cycles) ; les règles
 //! métier sont vérifiées par l'abaissement des commandes et par la validation.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::document::{Asset, Component, Document, Layout, Page, SiteSettings};
-use crate::id::{AssetId, ComponentId, LayoutId, NodeId, PageId};
-use crate::node::{A11y, Node, NodeKind, NodeMeta, PlatformOverrides, PlatformScope};
+use crate::id::{AssetId, ComponentId, LayoutId, NodeId, PageId, TokenName};
+use crate::node::{
+    A11y, Action, Href, ImageSource, Node, NodeKind, NodeMeta, PlatformOverrides, PlatformScope, PropValue, TextRole,
+};
+use crate::query::value_colors;
+use crate::style::color::ColorRef;
 use crate::style::responsive::Responsive;
-use crate::style::style::{InteractionState, ResponsiveValue, StyleError, StyleProp};
+use crate::style::style::{InteractionState, PropChange, ResponsiveValue, ResponsiveValuePatch, StyleError, StyleProp};
 use crate::tokens::DesignTokens;
 
 /// Op primitive inversible. Phase 2 : 1 op ↔ 1 mise à jour Yjs.
@@ -122,6 +126,213 @@ pub enum OpError {
     EntityNotFound(String),
     #[error(transparent)]
     Style(#[from] StyleError),
+}
+
+/// Entité identifiée de l'IR.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Entity {
+    Node(NodeId),
+    Page(PageId),
+    Layout(LayoutId),
+    Component(ComponentId),
+    Asset(AssetId),
+    /// Token de couleur, nommé par les styles.
+    ColorToken(TokenName),
+    /// Token de police, nommé par `font_family`.
+    FontToken(TokenName),
+}
+
+/// Champ d'un nœud remplacé par une op.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum NodeField {
+    /// Tous les champs : nœud inséré avec ses valeurs.
+    All,
+    /// Parent (déplacement) ; l'ordre des enfants n'est pas une donnée suivie.
+    Parent,
+    Kind,
+    Style(Option<InteractionState>, StyleProp),
+    Visibility,
+    Meta,
+    A11y,
+    Platform,
+    Overrides,
+}
+
+/// Donnée de l'IR touchée par une op (dépendances entre unités d'un brouillon IA).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum OpKey {
+    /// Existence d'une entité (création, suppression).
+    Exists(Entity),
+    /// Valeur entière d'une page, d'un layout, d'un composant ou d'un asset.
+    Value(Entity),
+    /// Champ d'un nœud.
+    Field(NodeId, NodeField),
+    Tokens,
+    Settings,
+}
+
+/// Accès d'une op au document.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct OpAccess {
+    /// Données dont l'op enregistre la valeur entière (calculée sur l'état qui la précède), ou
+    /// dont elle change l'existence.
+    pub writes: Vec<OpKey>,
+    /// Données que l'op suppose présentes sans les écrire : nœuds visés, parents, entités
+    /// référencées.
+    pub reads: Vec<OpKey>,
+}
+
+impl OpAccess {
+    fn node_field(node: &NodeId, field: NodeField) -> Self {
+        Self {
+            writes: vec![OpKey::Field(node.clone(), field)],
+            reads: vec![OpKey::Exists(Entity::Node(node.clone()))],
+        }
+    }
+
+    /// `Put*` : remplace la valeur, et crée l'entité si l'inverse la retire.
+    fn put(entity: Entity, creates: bool) -> Self {
+        let mut writes = vec![OpKey::Value(entity.clone())];
+        if creates {
+            writes.push(OpKey::Exists(entity));
+        }
+        Self {
+            writes,
+            reads: Vec::new(),
+        }
+    }
+
+    fn removal(entity: Entity) -> Self {
+        Self {
+            writes: vec![OpKey::Exists(entity)],
+            reads: Vec::new(),
+        }
+    }
+
+    fn read(&mut self, entity: Entity) {
+        self.reads.push(OpKey::Exists(entity));
+    }
+
+    fn read_href(&mut self, href: &Href) {
+        if let Href::Page { page, .. } = href {
+            self.read(Entity::Page(page.clone()));
+        }
+    }
+
+    fn read_image(&mut self, source: &ImageSource) {
+        if let ImageSource::Asset { id } = source {
+            self.read(Entity::Asset(id.clone()));
+        }
+    }
+
+    fn read_value(&mut self, value: &PropValue) {
+        match value {
+            PropValue::Href(href) => self.read_href(href),
+            PropValue::Image(source) => self.read_image(source),
+            PropValue::Text(_) | PropValue::Bool(_) => {}
+        }
+    }
+
+    fn read_color(&mut self, color: &ColorRef) {
+        if let Some(name) = color.token_name() {
+            self.read(Entity::ColorToken(name.clone()));
+        }
+    }
+
+    /// Tokens nommés par une valeur de style : couleurs (texte, fond, bordure, anneau) et police
+    /// (seule propriété à valeur `Token`).
+    fn read_style_value(&mut self, value: &ResponsiveValue) {
+        if let ResponsiveValue::Token(fonts) = value {
+            for name in fonts.values() {
+                self.read(Entity::FontToken(name.clone()));
+            }
+        }
+        for color in value_colors(value) {
+            self.read_color(color);
+        }
+    }
+
+    /// Tokens nommés par un patch de style (surcharges de variantes).
+    fn read_style_patch(&mut self, entries: Vec<(StyleProp, PropChange)>) {
+        for (_, change) in entries {
+            match change {
+                PropChange::Merge(ResponsiveValuePatch::Token(fonts)) => {
+                    for name in fonts.values() {
+                        self.read(Entity::FontToken(name.clone()));
+                    }
+                }
+                PropChange::Merge(ResponsiveValuePatch::Color(colors)) => {
+                    for color in colors.values() {
+                        self.read_color(color);
+                    }
+                }
+                PropChange::Merge(ResponsiveValuePatch::Background(backgrounds)) => {
+                    for color in backgrounds.values().into_iter().flat_map(|b| b.colors()) {
+                        self.read_color(color);
+                    }
+                }
+                PropChange::Merge(ResponsiveValuePatch::Ring(rings)) => {
+                    for ring in rings.values() {
+                        self.read_color(&ring.color);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Entités référencées par un nœud inséré : style, états d'interaction et type.
+    fn read_node(&mut self, node: &Node) {
+        for (_, value) in node.style.entries() {
+            self.read_style_value(&value);
+        }
+        for state in InteractionState::ALL {
+            for (_, value) in node.states.get(state).entries() {
+                self.read_style_value(&value);
+            }
+        }
+        self.read_kind(&node.kind);
+    }
+
+    /// Entités référencées par un type de nœud.
+    fn read_kind(&mut self, kind: &NodeKind) {
+        match kind {
+            NodeKind::Text(text) => {
+                if let TextRole::Label { for_input: Some(input) } = &text.role {
+                    self.read(Entity::Node(input.clone()));
+                }
+                for color in text.content.iter().filter_map(|run| run.color.as_ref()) {
+                    self.read_color(color);
+                }
+            }
+            NodeKind::Button(button) => {
+                if let Some(Action::ToggleVisibility { target }) = &button.action {
+                    self.read(Entity::Node(target.clone()));
+                }
+            }
+            NodeKind::Image(image) => self.read_image(&image.source),
+            NodeKind::Link(link) => self.read_href(&link.href),
+            NodeKind::ComponentInstance(instance) => {
+                let component = Entity::Component(instance.component.clone());
+                // Surcharges et variantes nomment des props et des axes du composant : elles
+                // dépendent de sa valeur, pas seulement de son existence.
+                if !instance.overrides.is_empty() || !instance.variants.is_empty() {
+                    self.reads.push(OpKey::Value(component.clone()));
+                }
+                self.read(component);
+                for value in instance.overrides.iter().map(|o| &o.value) {
+                    self.read_value(value);
+                }
+            }
+            NodeKind::Box(_)
+            | NodeKind::Stack(_)
+            | NodeKind::Grid(_)
+            | NodeKind::Icon(_)
+            | NodeKind::Input(_)
+            | NodeKind::Slot(_)
+            | NodeKind::RawCode(_) => {}
+        }
+    }
 }
 
 fn check_index(index: u32, len: usize) -> Result<usize, OpError> {
@@ -306,31 +517,25 @@ impl Op {
         }
     }
 
-    /// Ramène les indices d'insertion dans les bornes (rejeu partiel d'un brouillon).
-    pub fn clamp_indices(&mut self, doc: &Document) {
-        let clamp = |index: &mut u32, len: usize| *index = (*index).min(len as u32);
-        match self {
-            Op::InsertSubtree {
-                parent: Some(parent),
-                index,
-                ..
-            } => {
-                if let Some(node) = doc.nodes.get(parent) {
-                    clamp(index, node.children.len());
-                }
-            }
-            Op::MoveNode { node, parent, index } => {
-                if let Some(target) = doc.nodes.get(parent) {
-                    let len = target.children.iter().filter(|c| *c != node).count();
-                    clamp(index, len);
-                }
-            }
-            Op::PutLayout { index, .. } => clamp(index, doc.layouts.len()),
-            Op::PutPage { index, .. } => clamp(index, doc.pages.len()),
-            Op::PutComponent { index, .. } => clamp(index, doc.components.len()),
-            Op::PutAsset { index, .. } => clamp(index, doc.assets.len()),
+    /// Vrai si les deux ops ne diffèrent que par leur indice de position (rang parmi les enfants
+    /// d'un nœud ou dans la liste des pages, layouts, composants, assets). L'ordre n'est pas une
+    /// dépendance entre unités d'un brouillon.
+    pub(crate) fn same_except_position(&self, other: &Op) -> bool {
+        self.without_position() == other.without_position()
+    }
+
+    fn without_position(&self) -> Op {
+        let mut op = self.clone();
+        match &mut op {
+            Op::InsertSubtree { index, .. }
+            | Op::MoveNode { index, .. }
+            | Op::PutLayout { index, .. }
+            | Op::PutPage { index, .. }
+            | Op::PutComponent { index, .. }
+            | Op::PutAsset { index, .. } => *index = 0,
             _ => {}
         }
+        op
     }
 
     /// Enregistre dans `changes` ce que touche l'op (à appeler sur l'op et sur son inverse).
@@ -384,6 +589,131 @@ impl Op {
             Op::SetSettings { .. } => changes.settings = true,
         }
     }
+
+    /// Données écrites et lues par l'op. `inverse` est l'op renvoyée par son `apply` : il
+    /// distingue la création d'une entité du remplacement de sa valeur.
+    pub(crate) fn access(&self, inverse: &Op) -> OpAccess {
+        match self {
+            Op::InsertSubtree { parent, nodes, .. } => {
+                let mut access = OpAccess::default();
+                if let Some(parent) = parent {
+                    access.read(Entity::Node(parent.clone()));
+                }
+                for node in nodes {
+                    access.writes.push(OpKey::Exists(Entity::Node(node.id.clone())));
+                    access.writes.push(OpKey::Field(node.id.clone(), NodeField::All));
+                    access.read_node(node);
+                }
+                access
+            }
+            // Le retrait ne porte aucune valeur : seule compte l'existence de la racine.
+            Op::RemoveSubtree { root } => OpAccess::removal(Entity::Node(root.clone())),
+            Op::MoveNode { node, parent, .. } => {
+                let mut access = OpAccess::node_field(node, NodeField::Parent);
+                access.read(Entity::Node(parent.clone()));
+                access
+            }
+            Op::SetKind { node, kind } => {
+                let mut access = OpAccess::node_field(node, NodeField::Kind);
+                access.read_kind(kind);
+                access
+            }
+            Op::SetStyleProp {
+                node,
+                state,
+                prop,
+                value,
+            } => {
+                let mut access = OpAccess::node_field(node, NodeField::Style(*state, *prop));
+                if let Some(value) = value {
+                    access.read_style_value(value);
+                }
+                access
+            }
+            Op::SetVisibility { node, .. } => OpAccess::node_field(node, NodeField::Visibility),
+            Op::SetMeta { node, .. } => OpAccess::node_field(node, NodeField::Meta),
+            Op::SetA11y { node, .. } => OpAccess::node_field(node, NodeField::A11y),
+            Op::SetPlatform { node, .. } => OpAccess::node_field(node, NodeField::Platform),
+            Op::SetOverrides { node, .. } => OpAccess::node_field(node, NodeField::Overrides),
+            Op::PutLayout { layout, .. } => {
+                let creates = matches!(inverse, Op::RemoveLayout { .. });
+                let mut access = OpAccess::put(Entity::Layout(layout.id.clone()), creates);
+                access.read(Entity::Node(layout.root.clone()));
+                access
+            }
+            Op::RemoveLayout { id } => OpAccess::removal(Entity::Layout(id.clone())),
+            Op::PutPage { page, .. } => {
+                let creates = matches!(inverse, Op::RemovePage { .. });
+                let mut access = OpAccess::put(Entity::Page(page.id.clone()), creates);
+                access.read(Entity::Node(page.root.clone()));
+                if let Some(layout) = &page.layout {
+                    access.read(Entity::Layout(layout.clone()));
+                }
+                if let Some(image) = &page.seo.og_image {
+                    access.read(Entity::Asset(image.clone()));
+                }
+                access
+            }
+            Op::RemovePage { id } => OpAccess::removal(Entity::Page(id.clone())),
+            Op::PutComponent { component, .. } => {
+                let creates = matches!(inverse, Op::RemoveComponent { .. });
+                let mut access = OpAccess::put(Entity::Component(component.id.clone()), creates);
+                access.read(Entity::Node(component.root.clone()));
+                for prop in &component.props {
+                    access.read_value(&prop.default);
+                }
+                for over in component
+                    .variants
+                    .iter()
+                    .flat_map(|axis| &axis.options)
+                    .flat_map(|option| &option.overrides)
+                {
+                    access.read_style_patch(over.style.entries());
+                    for state in InteractionState::ALL {
+                        if let Some(patch) = over.states.get(state) {
+                            access.read_style_patch(patch.entries());
+                        }
+                    }
+                }
+                access
+            }
+            Op::RemoveComponent { id } => OpAccess::removal(Entity::Component(id.clone())),
+            Op::SetTokens { tokens } => {
+                let mut access = OpAccess {
+                    writes: vec![OpKey::Tokens],
+                    reads: Vec::new(),
+                };
+                // Les tokens créés ou supprimés : les styles qui les nomment en dépendent. Un
+                // changement de valeur laisse la référence valide.
+                if let Op::SetTokens { tokens: before } = inverse {
+                    let colors = |t: &DesignTokens| t.colors.iter().map(|c| c.name.clone()).collect::<BTreeSet<_>>();
+                    let fonts = |t: &DesignTokens| t.fonts.iter().map(|f| f.name.clone()).collect::<BTreeSet<_>>();
+                    for name in colors(tokens).symmetric_difference(&colors(before)) {
+                        access.writes.push(OpKey::Exists(Entity::ColorToken(name.clone())));
+                    }
+                    for name in fonts(tokens).symmetric_difference(&fonts(before)) {
+                        access.writes.push(OpKey::Exists(Entity::FontToken(name.clone())));
+                    }
+                }
+                access
+            }
+            Op::PutAsset { asset, .. } => {
+                let creates = matches!(inverse, Op::RemoveAsset { .. });
+                OpAccess::put(Entity::Asset(asset.id.clone()), creates)
+            }
+            Op::RemoveAsset { id } => OpAccess::removal(Entity::Asset(id.clone())),
+            Op::SetSettings { settings } => {
+                let mut access = OpAccess {
+                    writes: vec![OpKey::Settings],
+                    reads: Vec::new(),
+                };
+                if let Some(favicon) = &settings.favicon {
+                    access.read(Entity::Asset(favicon.clone()));
+                }
+                access
+            }
+        }
+    }
 }
 
 fn insert_subtree(doc: &mut Document, parent: Option<&NodeId>, index: u32, nodes: &[Node]) -> Result<Op, OpError> {
@@ -396,21 +726,14 @@ fn insert_subtree(doc: &mut Document, parent: Option<&NodeId>, index: u32, nodes
             root.id
         )));
     }
-    let ids: BTreeSet<&NodeId> = nodes.iter().map(|n| &n.id).collect();
-    if ids.len() != nodes.len() {
+    let by_id: BTreeMap<&NodeId, &Node> = nodes.iter().map(|n| (&n.id, n)).collect();
+    if by_id.len() != nodes.len() {
         return Err(OpError::MalformedSubtree("duplicate node ids".into()));
     }
-    for node in nodes {
-        if doc.nodes.contains_key(&node.id) {
-            return Err(OpError::NodeExists(node.id.clone()));
-        }
-        if node.id != root.id && !node.parent.as_ref().is_some_and(|p| ids.contains(p)) {
-            return Err(OpError::MalformedSubtree(format!(
-                "node `{}` is outside the subtree",
-                node.id
-            )));
-        }
+    if let Some(node) = nodes.iter().find(|n| doc.nodes.contains_key(&n.id)) {
+        return Err(OpError::NodeExists(node.id.clone()));
     }
+    check_subtree_links(nodes, &by_id)?;
     if let Some(parent) = parent {
         let target = doc
             .nodes
@@ -423,6 +746,45 @@ fn insert_subtree(doc: &mut Document, parent: Option<&NodeId>, index: u32, nodes
         doc.nodes.insert(node.id.clone(), node.clone());
     }
     Ok(Op::RemoveSubtree { root: root.id.clone() })
+}
+
+/// Vérifie que les liens `parent` et `children` d'un sous-arbre (`nodes[0]` = racine) concordent
+/// dans les deux sens : chaque nœud hors racine figure une seule fois dans les enfants de son
+/// parent, chaque enfant listé appartient au sous-arbre, et tous les nœuds sont atteignables
+/// depuis la racine (ni orphelin ni cycle détaché). L'inverse `RemoveSubtree`, qui suit
+/// `children`, retire alors exactement ce qui a été inséré.
+fn check_subtree_links(nodes: &[Node], by_id: &BTreeMap<&NodeId, &Node>) -> Result<(), OpError> {
+    let mut listed: BTreeSet<&NodeId> = BTreeSet::new();
+    let mut stack: Vec<&Node> = nodes.first().into_iter().collect();
+    // Chaque nœud n'est empilé qu'après sa première inscription dans `listed` : le parcours se
+    // termine même sur un payload cyclique.
+    while let Some(node) = stack.pop() {
+        for child in &node.children {
+            let Some(&child_node) = by_id.get(child) else {
+                return Err(OpError::MalformedSubtree(format!(
+                    "child `{child}` of `{}` is outside the subtree",
+                    node.id
+                )));
+            };
+            if child_node.parent.as_ref() != Some(&node.id) {
+                return Err(OpError::MalformedSubtree(format!(
+                    "`{child}` is listed as a child of `{}` but points to another parent",
+                    node.id
+                )));
+            }
+            if !listed.insert(child) {
+                return Err(OpError::MalformedSubtree(format!("`{child}` is listed twice")));
+            }
+            stack.push(child_node);
+        }
+    }
+    match nodes.iter().skip(1).find(|n| !listed.contains(&n.id)) {
+        Some(node) => Err(OpError::MalformedSubtree(format!(
+            "node `{}` is not reachable from the root",
+            node.id
+        ))),
+        None => Ok(()),
+    }
 }
 
 fn remove_subtree(doc: &mut Document, root: &NodeId) -> Result<Op, OpError> {
