@@ -757,20 +757,24 @@ consignée ici (question → décision, avec la date).
 4. Mode sombre du site exporté.
    - **Décision (2026-10-07) : suivre le système.** Les valeurs sombres des tokens sont émises dans
      une media query `prefers-color-scheme: dark` : aucun JavaScript, aucun flash au chargement.
+5. Style posé sur une instance de composant (il devient la prop `className` du composant exporté).
+   - **Décision (2026-10-07) : tout style est permis, résolu par `tailwind-merge`.** La racine du
+     composant fusionne ses classes avec `className` (`twMerge`) : en cas de conflit, la classe de
+     l'instance l'emporte. `tailwind-merge` devient une dépendance du code exporté.
 
 **Avant (b2)**
 
-5. Projet Supabase hébergé : organisation, région, offre.
+6. Projet Supabase hébergé : organisation, région, offre.
 
 **Avant (c)**
 
-6. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
-7. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
+7. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
+8. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
    build seulement à l'export, dans un job serveur.
 
 **Avant (f)**
 
-8. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
+9. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
 
 ---
 
