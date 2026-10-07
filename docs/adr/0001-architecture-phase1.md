@@ -743,7 +743,11 @@ consignée ici (question → décision, avec la date).
 
 1. Data binding (« Should » dans la spec) : dans la Phase 1 ? Si oui, le schéma l'intègre dès (a) ;
    sinon il arrive plus tard par une migration d'IR. Conditionne aussi le contenu d'une route dynamique.
+   - **Décision (2026-10-06) : hors Phase 1.** L'IR v1 ne contient ni source de données ni liste
+     répétée ; ils arriveront par une migration (`migrate.rs`, `IR_VERSION` 2). En Phase 1, le
+     contenu d'une route dynamique (`[slug]`) reste statique.
 2. Validation du découpage (§ 11), dont la nouvelle étape (b2).
+   - **Décision (2026-10-06) : découpage validé tel quel**, (b2) entre (b) et (c).
 
 **Avant (b2)**
 
@@ -777,3 +781,75 @@ consignée ici (question → décision, avec la date).
 - **Secrets** : jamais dans le dépôt (il est public). Ils vont dans les variables d'environnement
   de l'environnement cloud ou, sur Pro/Max, dans ses credentials API. `ANTHROPIC_API_KEY` (évals,
   étape f) reste une variable d'environnement : le proxy n'attache pas de credential à `api.anthropic.com`.
+
+---
+
+## 14. Précisions et écarts d'implémentation de l'étape (a) (2026-10-06)
+
+Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux points suivants près.
+
+**Schéma**
+
+1. `Style.align_self` utilise un type dédié `AlignSelf` (`auto | start | center | end | stretch |
+   baseline`) : `auto` est la valeur neutre et n'existe pas dans `Align`.
+2. `Size` gagne `none`, valide seulement pour `max_width` / `max_height` (leur valeur neutre) ; ailleurs,
+   erreur de validation `STYLE_NOT_ALLOWED`.
+3. Valeur neutre posée quand une surcharge crée une propriété absente (§ 3.5) : valeur initiale
+   CSS/Tailwind pour les propriétés non héritées ; valeur héritée des ancêtres (à `base`) pour la
+   typographie ; valeur hors état pour un état d'interaction. Le compilateur (b) n'émet pas une base
+   égale à ce neutre.
+4. Palette : les 26 teintes de Tailwind 4.3 (dont `mauve`, `olive`, `mist`, `taupe`), valeurs OKLCH
+   embarquées (`crates/ir/data/tailwind-palette.txt`) pour le calcul de contraste. Les noms de token
+   de la forme `<teinte>-<nuance>` et `white | black | transparent | current` sont réservés.
+5. Icônes : catalogue lucide 1.52.0 embarqué (`crates/ir/data/lucide-icons.txt`). Le compilateur (b)
+   devra épingler `lucide-react` à la même version.
+6. Côté TypeScript, les valeurs composites sérialisées en chaîne (`Size`, `Margin`, `Inset`,
+   `ColorRef`, `Hex`, ids, `NodeRef`) sont typées `string` ; les énumérations fermées (`Space`,
+   `FontSize`…) sont des unions de littéraux. Les champs omis à la sérialisation sont optionnels.
+
+**Commandes**
+
+7. `KindSpec::Text` accepte `for_input` (référence `$nom` ou id) et `KindSpec::Button.action` une
+   `ActionSpec` à cible `NodeRef` : un bouton burger et son menu, ou une étiquette et son champ,
+   se créent dans la même commande.
+8. `MetaPatch` est plat : `name`, `anchor`, `locked`, `slot`, `a11y_label`, `a11y_hidden`.
+9. `create_component` déplace les propriétés de placement de la racine (marges, `grow`, `shrink`,
+   `align_self`, `col_span`, `order`) sur l'instance créée, pour que la mise en page ne bouge pas.
+10. Les défauts explicites d'un nœud créé sont posés par la commande : `Stack` → `direction: column`,
+    `Grid` → `columns: 1`, `Button`/`Link`/`Input` → anneau de focus (token `ring`, sinon `primary`),
+    `Icon` → décorative (`a11y.hidden`) sauf étiquette fournie.
+11. Origine `Ai` : en plus des commandes non exposées (§ 6), la création et l'édition de `RawCode`
+    sont refusées (`FORBIDDEN`).
+12. Périmètre : `content_only` n'autorise que `set_props` sur les champs de contenu (texte, source et
+    alt d'image, lien, libellé de bouton) ; `breakpoint` n'autorise que `set_style` et
+    `set_visibility` sur ce seul breakpoint ; `subtree` refuse toute commande hors nœuds (pages,
+    tokens, composants).
+
+**Ops et historique**
+
+13. `Op::InsertSubtree.parent` est un `Option<NodeId>` (`None` : racine de page, layout ou
+    composant) et `Op::PutAsset` porte un `index`, pour que l'undo restaure l'ordre exact.
+14. `Session::new(doc, seed)` : la graine du générateur d'ids est fournie par l'hôte
+    (`crypto.getRandomValues` en wasm), la crate reste déterministe et sans dépendance système.
+15. `undo` / `redo` renvoient `Result<Option<ChangeSet>, CommandError>` (refusés pendant un brouillon
+    IA). `begin_draft` renvoie une erreur si un brouillon est déjà ouvert.
+16. Unité de revue d'un brouillon (`ChangeUnitId`) = une commande du run. L'acceptation partielle
+    rejoue les ops des unités choisies (indices ramenés dans les bornes) ; une unité qui dépend d'une
+    unité rejetée fait échouer l'acceptation (`UNIT_DEPENDENCY`), brouillon conservé. Seules les
+    erreurs absentes avant le brouillon bloquent sa validation.
+
+**Validation**
+
+17. Un saut de niveau de titre n'est signalé qu'entre deux titres consécutifs ; l'absence de H1 ou
+    de `Main` est un avertissement (une page en construction n'est pas bloquée).
+18. Le contraste est calculé dans les ancêtres du même arbre (une instance ne connaît pas le fond de
+    la page hôte), sans les images de fond, l'opacité des ancêtres ni les états d'interaction ; en
+    mode sombre seulement si un token définit une valeur sombre.
+19. Les cibles tactiles ne sont contrôlées que sur les dimensions explicites ; la taille réelle et le
+    débordement horizontal relèvent de la mesure dans le navigateur (étapes c et f).
+
+**Outillage**
+
+20. `cargo xtask codegen` (§ 2) est livré avec son premier consommateur, `packages/ir-types` à
+    l'étape (c). En (a), la génération TypeScript (ts-rs) et JSON Schema (schemars) est couverte par
+    des tests, dont l'absence de récursion dans le schéma de `Command` (mode `strict`).

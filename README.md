@@ -8,10 +8,19 @@ versionné et exportable. Le code édité à la main se reflète sur le canvas.
 
 ## État
 
-Phase 1 (MVP web) : architecture acceptée, prochaine étape (a) `crates/ir`.
+Phase 1 (MVP web) : étape (a) `crates/ir` livrée, prochaine étape (b) `crates/compiler-web`.
 
 - Spécifications : [`docs/SPEC.md`](docs/SPEC.md)
 - Architecture de la Phase 1 : [`docs/adr/0001-architecture-phase1.md`](docs/adr/0001-architecture-phase1.md)
+
+## Développement
+
+```sh
+cargo fmt --all --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
+```
 
 ## Stack
 
@@ -23,7 +32,7 @@ Phase 1 (MVP web) : architecture acceptée, prochaine étape (a) `crates/ir`.
 
 ## Feuille de route de la Phase 1
 
-- [ ] (a) `crates/ir` : schéma, commandes, historique, validation
+- [x] (a) `crates/ir` : schéma, commandes, historique, validation
 - [ ] (b) `crates/compiler-web` : IR → TSX + Tailwind
 - [ ] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
 - [ ] (c) `crates/engine-wasm` + canvas en iframe
