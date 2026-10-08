@@ -407,7 +407,11 @@ pub fn kitchen_sink() -> Document {
               "style": { "font_size": { "base": "sm" }, "text_color": { "base": "muted-foreground" } } },
             { "parent": "$aside", "kind": { "type": "Slot", "name": "aside" } }
         ]),
-        &[("heading", "$heading", "Text"), ("showHeading", "$heading", "Visible"), ("showAside", "$aside", "Visible")],
+        &[
+            ("heading", "$heading", "Text"),
+            ("showHeading", "$heading", "Visible"),
+            ("showAside", "$aside", "Visible"),
+        ],
     );
     let panel_root = session
         .document()
