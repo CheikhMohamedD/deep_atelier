@@ -1140,3 +1140,103 @@ l'organisation ni le projet ne sont identifiés dans le dépôt.
     vérification (autorité de certification de Supabase) est à ajouter au déploiement.
 13. Chaque sauvegarde envoie et enregistre le document entier, sans différentiel : suffisant pour
     le MVP, à revoir pour les gros documents.
+
+---
+
+## 17. Étape (c) : moteur wasm, canvas et coquille de l'éditeur (2026-10-08)
+
+Décisions « Avant (c) » : § 12, questions 7 (français et anglais) et 8 (pas de build dans
+l'éditeur). L'arborescence suit le § 2, sauf : `packages/tokens`, `packages/ai` et
+`packages/config` ne sont pas encore créés ; les composants de l'éditeur se rangent dans
+`components/{auth,projects,editor,ui}`.
+
+**Socle du monorepo**
+
+1. pnpm 12 (`packageManager`), Turborepo 2.11 (`agentGuidance: false` : les consignes des agents
+   restent dans `CLAUDE.md`), TypeScript 5.9 strict pour tout le workspace (`tsconfig.base.json` :
+   `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), Prettier 3.9.9 sur tout sauf les
+   fichiers générés.
+2. `cargo xtask codegen` écrit les types TypeScript de l'IR, du canvas et du contrat de l'API
+   (`crates/api/src/schema.rs`) dans `packages/ir-types` (ts-rs ; entiers 64 bits en `number`,
+   comme dans le JSON). La CI échoue si les fichiers versionnés ne suivent plus les types Rust.
+   `cargo xtask demo <landing|kitchen> <fichier>` écrit un document de démonstration.
+
+**Canvas** (`crates/compiler-web/src/canvas.rs`)
+
+3. `canvas_page` rend une page (`RenderTree`) en arbre d'éléments sérialisable pour l'iframe,
+   avec les classes de l'export (`node_classes`) appliquées au style effectif de chaque rendu.
+   Ce style comprend :
+   - les surcharges de la variante choisie par l'instance (style et états) ;
+   - puis ce que portent les instances dont le nœud est la racine (style, états, visibilité,
+     ancre, accessibilité, échappatoires web). L'instance la plus externe l'emporte, comme avec
+     `twMerge`.
+
+   Le canvas reste donc un interprète de l'IR (§ 10, point 5) avec le rendu de l'export.
+4. Chaque élément porte une clé unique dans la page (`instances/nœud`), puisqu'un nœud de
+   composant est rendu une fois par instance. Il porte aussi l'instance de la page qui le
+   contient : le premier clic la sélectionne, le double-clic sélectionne l'élément.
+5. Ressources : images distantes telles quelles ; images de remplissage en SVG `data:` (le même
+   SVG qu'à l'export) ; assets en aplat marqué `data-asset` en attendant le stockage. Les liens
+   vers une page portent `data-page` ; les cibles des bascules sont des clés. Une racine de page
+   sans classe devient un fragment, comme à l'export.
+
+**Moteur** (`crates/engine-wasm`, `packages/engine`)
+
+6. `Core` (Rust natif, testé) porte la session de l'IR : transactions atomiques, undo/redo,
+   gestes, rendu du canvas, validation. `Engine` l'expose par `wasm-bindgen`, en JSON typé côté
+   TypeScript. Profil cargo `wasm` (taille, LTO, `strip`, `panic = "abort"`) : 2,9 Mo, 574 Ko
+   gzip. `wasm-bindgen-cli` est épinglé à la version exacte de la crate (vérifié au build).
+
+**Iframe** (`packages/canvas-protocol`, `packages/canvas-runtime`)
+
+7. Protocole : messages typés dans une enveloppe versionnée (`deep-atelier/canvas@1`), avec des
+   gardes de forme des deux côtés et une vérification de la fenêtre émettrice. L'iframe est
+   isolée (`sandbox="allow-scripts"`, origine opaque) ; elle n'écrit qu'à l'origine de l'éditeur.
+8. Runtime : React 19 rend la page ; `@tailwindcss/browser` 4.3.3 compile les classes avec la
+   feuille du thème de l'export ; les icônes viennent de `lucide-react` 1.52.0, le catalogue de
+   l'IR. Il mesure les éléments (rectangles, hauteur, débordement horizontal) et répond aux tests
+   de position (`elementFromPoint`). En Preview, il joue les bascules, les liens vers les pages
+   et les ancres. Le bundle est un script classique (IIFE), car une origine opaque refuse un
+   module ES sans CORS.
+
+**Éditeur** (`apps/editor`, Next.js 15.5, React 19.3)
+
+9. Langues : next-intl, langue gardée en cookie, sinon négociée (`Accept-Language`), français par
+   défaut. Les messages sont typés et un test vérifie que les deux catalogues ont les mêmes clés.
+10. Connexion : `@supabase/ssr` (session en cookies). Le middleware vérifie et rafraîchit le
+    jeton (`getClaims`) et protège `/projects`. Le rappel `/auth/callback` échange le code PKCE ;
+    le chemin de retour est toujours interne.
+11. Éditeur : un état Zustand + Immer, et une session qui pilote le moteur, l'API et la
+    sauvegarde.
+    - Artboards côte à côte : 390, 768 et 1280 px affichés, 640, 1024 et 1536 au choix. Chacun
+      est une iframe ; une vitre au-dessus capte la souris en mode Design.
+    - Sélection et survol par test de position : Maj ajoute à la sélection, Échap la vide.
+    - Cadres de sélection d'épaisseur constante quel que soit le zoom.
+    - Zoom (Ctrl/⌘ + molette, boutons, ajustement) et déplacement (molette, glisser).
+    - Suppression de la sélection (jamais une racine) ; ⌘Z, ⇧⌘Z et ⌘Y.
+    - Sauvegarde automatique une seconde après le dernier changement, nouvel essai après 5 s
+      d'erreur. Un conflit de version arrête la sauvegarde et propose de recharger.
+    - Avertissement avant de quitter avec des changements non enregistrés.
+12. Tests :
+    - vitest : sélection, vue, sauvegarde, catalogues ;
+    - Playwright aux largeurs 390, 768 et 1280 (21 tests) : connexion par lien magique (Mailpit),
+      langue, projets, rendu et sélection dans les trois artboards, suppression, undo et redo,
+      enregistrement relu après rechargement, Preview avec le menu burger à 390 px, zoom,
+      absence de défilement horizontal ;
+    - job CI `e2e` : stack Supabase local, API, éditeur buildé.
+
+**Écarts au § 8 et limites connues**
+
+13. Le code libre (`RawCode`) s'affiche comme du code dans le canvas, sans être exécuté. Sa
+    transpilation dans l'iframe (prévue au § 8, imports via esm.sh) arrive avec le panneau de
+    code (étape g).
+14. Chaque changement renvoie la page entière (`render`) au lieu d'un `patch` ; React ne met à
+    jour que le DOM qui change. La largeur libre (§ 8) n'est pas proposée.
+15. Les images d'assets sont des aplats tant que le stockage des assets n'existe pas.
+16. Le runtime pèse 1,15 Mo minifié (React, `@tailwindcss/browser`, toutes les icônes lucide),
+    chargé une fois par iframe ; le module wasm n'est pas passé par `wasm-opt`.
+17. À 390 px, l'éditeur s'utilise sans défilement horizontal, mais l'ajustement montre les trois
+    artboards à 13 % : sur téléphone, mieux vaut n'afficher que 390.
+18. Pas encore de panneau des calques, d'inspecteur ni de création de pages (étape d), ni de
+    glisser-déposer (étape e). La connexion GitHub n'est pas couverte par les tests de bout en
+    bout.

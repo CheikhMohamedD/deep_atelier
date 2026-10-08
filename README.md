@@ -8,8 +8,8 @@ versionné et exportable. Le code édité à la main se reflète sur le canvas.
 
 ## État
 
-Phase 1 (MVP web) : étapes (a) `crates/ir`, (b) `crates/compiler-web` et (b2) `crates/api` +
-Supabase livrées, prochaine étape (c) `crates/engine-wasm` + canvas.
+Phase 1 (MVP web) : étapes (a) à (c) livrées (IR, compilateur web, API + Supabase, moteur wasm,
+canvas et coquille de l'éditeur), prochaine étape (d) : calques et inspecteur.
 
 - Spécifications : [`docs/SPEC.md`](docs/SPEC.md)
 - Architecture de la Phase 1 : [`docs/adr/0001-architecture-phase1.md`](docs/adr/0001-architecture-phase1.md)
@@ -36,6 +36,23 @@ set -a; eval "$(supabase status -o env)"; set +a
 cargo test -p deep-atelier-api -- --include-ignored
 ```
 
+Éditeur (Node 22.19+, pnpm 12, `wasm-bindgen-cli` à la version de la crate) : `pnpm build`
+construit le moteur wasm et le runtime du canvas, puis l'éditeur. En local, il lui faut le stack
+Supabase et l'API (voir ci-dessus).
+
+```sh
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
+pnpm install
+cargo xtask codegen          # types TypeScript générés (packages/ir-types)
+pnpm build
+cp apps/editor/.env.example apps/editor/.env.local   # puis la clé publishable de `supabase status`
+cargo run -p deep-atelier-api &
+pnpm --filter @deep-atelier/editor dev               # PORT=3100 si le port 3000 est pris
+# Tests de l'éditeur : vitest, puis Playwright aux largeurs 390, 768 et 1280
+pnpm test
+E2E_BASE_URL=http://localhost:3000 pnpm --filter @deep-atelier/editor e2e
+```
+
 Vérifier un projet exporté comme la CI (job `export`) : la landing de démonstration est écrite dans
 `$OUT`, construite, servie, puis contrôlée (viewports, menu, Lighthouse mobile) avec Chrome.
 
@@ -54,7 +71,8 @@ CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 - Monorepo pnpm + Turborepo + workspace Cargo
 - Moteur en Rust (IR, compilateur web, parser TSX via oxc), compilé en WebAssembly pour l'éditeur
 - Backend Rust (Axum + Tokio), Supabase (Postgres, Auth, Storage)
-- Éditeur : Next.js 15, React 19, TypeScript strict, Tailwind v4, shadcn/ui, Zustand, dnd-kit, Monaco
+- Éditeur : Next.js 15, React 19, TypeScript strict, Tailwind v4, shadcn/ui, Zustand, dnd-kit, Monaco,
+  next-intl (français et anglais)
 - Code exporté : Next.js 16 (App Router), React 19, TypeScript strict, Tailwind v4, mis en forme
   comme Prettier
 - IA : outils = commandes de l'IR, Claude par défaut
@@ -64,7 +82,7 @@ CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 - [x] (a) `crates/ir` : schéma, commandes, historique, validation
 - [x] (b) `crates/compiler-web` : IR → TSX + Tailwind
 - [x] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
-- [ ] (c) `crates/engine-wasm` + canvas en iframe
+- [x] (c) `crates/engine-wasm` + canvas en iframe
 - [ ] (d) Calques + inspecteur par breakpoint
 - [ ] (e) Glisser-déposer depuis la bibliothèque
 - [ ] (f) Couche IA : prompt, outils, validation, aperçu fantôme
