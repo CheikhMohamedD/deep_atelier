@@ -22,6 +22,26 @@ jobs:
       - run: cargo test --all
       - run: cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
 
+  api:
+    name: API (stack Supabase local, intégration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.109.1
+      # Jetons signés en ES256 avec un JWKS, comme le projet hébergé (supabase/config.toml).
+      - name: Clé de signature du stack local
+        run: echo '[]' > supabase/signing_keys.json && supabase gen signing-key --algorithm ES256 --yes
+      - name: Stack Supabase local (base, auth, API REST)
+        run: supabase start -x studio,meta,imgproxy,inbucket,analytics,vector,edge-runtime,realtime,storage
+      - name: Tests de l'API, intégration comprise
+        run: |
+          set -a; eval "$(supabase status -o env)"; set +a
+          cargo test -p deep-atelier-api -- --include-ignored
+
   export:
     name: Export Next.js (Prettier, build, ESLint, viewports, Lighthouse)
     runs-on: ubuntu-latest
