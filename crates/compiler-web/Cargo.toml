@@ -11,7 +11,9 @@ name = "compiler_web"
 
 [dependencies]
 ir = { package = "deep-atelier-ir", path = "../ir" }
+serde.workspace = true
 serde_json.workspace = true
+ts-rs.workspace = true
 unicode-width = "0.2.2"
 
 [dev-dependencies]

@@ -520,7 +520,7 @@ fn xml_escape(value: &str) -> String {
 }
 
 /// Image de remplissage : rectangle neutre et son libellé.
-fn placeholder_svg(placeholder: &Placeholder) -> String {
+pub(crate) fn placeholder_svg(placeholder: &Placeholder) -> String {
     let Placeholder {
         label, width, height, ..
     } = placeholder;
