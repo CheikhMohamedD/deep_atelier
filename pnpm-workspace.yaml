@@ -8,3 +8,6 @@ allowBuilds:
   esbuild: true
   sharp: false
   unrs-resolver: false
+
+minimumReleaseAgeExclude:
+  - vite@8.3.4
