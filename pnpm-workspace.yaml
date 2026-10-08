@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+# Scripts d'installation autorisés (pnpm 11+) ; les autres sont ignorés.
+allowBuilds:
+  esbuild: true
+  sharp: false
+  unrs-resolver: false

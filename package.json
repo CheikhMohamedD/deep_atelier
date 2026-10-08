@@ -1,0 +1,24 @@
+{
+  "name": "deep-atelier",
+  "private": true,
+  "description": "Deep Atelier : website builder orienté développeurs (monorepo pnpm + Turborepo + Cargo).",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "codegen": "cargo xtask codegen"
+  },
+  "devDependencies": {
+    "prettier": "3.9.9",
+    "turbo": "2.11.7",
+    "typescript": "5.9.3"
+  }
+}

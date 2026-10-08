@@ -1,0 +1,14 @@
+# Générés : ne pas reformater (cargo xtask codegen, wasm-bindgen, builds).
+packages/ir-types/src/generated/
+packages/ir-types/src/index.ts
+packages/engine/pkg/
+apps/editor/public/canvas/
+**/.next/
+**/dist/
+pnpm-lock.yaml
+target/
+graphify-out/
+crates/
+docs/
+supabase/
+.claude/
