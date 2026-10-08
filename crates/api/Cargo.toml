@@ -1,0 +1,49 @@
+[package]
+name = "deep-atelier-api"
+version = "0.1.0"
+description = "API de Deep Atelier : authentification Supabase, projets, sauvegarde automatique, versions"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "api"
+
+[[bin]]
+name = "deep-atelier-api"
+path = "src/main.rs"
+
+[dependencies]
+ir = { package = "deep-atelier-ir", path = "../ir" }
+axum = "0.8.9"
+dotenvy = "0.15.7"
+jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "http2"] }
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { version = "0.9.0", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls-aws-lc-rs",
+    "postgres",
+    "uuid",
+    "time",
+    "json",
+    "derive",
+] }
+thiserror.workspace = true
+time = { version = "0.3.55", features = ["serde", "serde-well-known"] }
+tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tower-http = { version = "0.7.1", features = ["catch-panic", "cors", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.27.0", features = ["serde", "v4"] }
+
+[dev-dependencies]
+base64 = "0.22.1"
+http-body-util = "0.1.5"
+p256 = { version = "0.13.2", features = ["ecdsa", "pkcs8"] }
+rand_core = { version = "0.6.4", features = ["getrandom"] }
+tower = { version = "0.5.3", features = ["util"] }
+
+[lints]
+workspace = true
