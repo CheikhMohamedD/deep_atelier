@@ -771,6 +771,11 @@ consignée ici (question → décision, avec la date).
      sans migration quand de vrais utilisateurs arrivent. Ni l'organisation ni l'id du projet
      n'apparaissent dans le dépôt.
 10. Méthodes de connexion à l'éditeur (question ajoutée à l'étape b2 : la spec ne les précise pas).
+    - **Décision (2026-10-08) : GitHub OAuth et lien magique par e-mail**, sans mot de passe. Le
+      propriétaire crée une OAuth App GitHub (id et secret dans la configuration Supabase, jamais
+      dans le dépôt). Le service e-mail par défaut de Supabase n'écrit qu'aux adresses autorisées
+      (2 messages par heure) : un SMTP (Resend, Postmark…) sera configuré avant l'ouverture au
+      public.
 
 **Avant (c)**
 
