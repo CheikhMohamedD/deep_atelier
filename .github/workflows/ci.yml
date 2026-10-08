@@ -13,7 +13,7 @@ jobs:
     name: Rust (fmt, clippy, tests, wasm)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # rust-toolchain.toml installe la toolchain stable, clippy, rustfmt et la cible wasm32.
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -21,3 +21,55 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all
       - run: cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
+
+  export:
+    name: Export Next.js (Prettier, build, ESLint, viewports, Lighthouse)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Les tests écrivent sur disque la landing de démonstration et le document « tout-en-un ».
+      - name: Exporter les projets de démonstration
+        run: cargo test -p deep-atelier-compiler-web --test demo
+        env:
+          DEEP_ATELIER_EXPORT_DIR: ${{ runner.temp }}/landing
+          DEEP_ATELIER_KITCHEN_DIR: ${{ runner.temp }}/kitchen
+      - name: Prettier, build et ESLint des projets exportés
+        run: |
+          for project in landing kitchen; do
+            cd "$RUNNER_TEMP/$project"
+            pnpm dlx prettier@3.9.9 --check .
+            pnpm install --no-frozen-lockfile
+            pnpm build
+            pnpm lint
+          done
+      - name: Installer l'outil de contrôle
+        working-directory: tools/export-check
+        run: pnpm install --frozen-lockfile
+      - name: Viewports, menu et Lighthouse mobile
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          (cd "$RUNNER_TEMP/landing" && pnpm start --port 3913 > "$RUNNER_TEMP/landing.log" 2>&1 &)
+          (cd "$RUNNER_TEMP/kitchen" && pnpm start --port 3914 > "$RUNNER_TEMP/kitchen.log" 2>&1 &)
+          node tools/export-check/check.mjs --url http://localhost:3913 --paths /,/a-propos \
+            --menu Menu --lighthouse --reports "$RUNNER_TEMP/reports/landing"
+          # Le document « tout-en-un » référence des assets et des images distantes absents de la CI.
+          node tools/export-check/check.mjs --url http://localhost:3914 --paths /,/cuisine/demo \
+            --allow-console-errors --reports "$RUNNER_TEMP/reports/kitchen"
+      - name: Conserver les captures et les rapports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-reports
+          path: |
+            ${{ runner.temp }}/reports
+            ${{ runner.temp }}/*.log
+          if-no-files-found: ignore
