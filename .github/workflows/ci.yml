@@ -45,10 +45,16 @@ jobs:
           cargo test -p deep-atelier-api -- --include-ignored
 
   web:
-    name: Web (Prettier, types, tests)
+    name: Web (Prettier, moteur wasm, types, tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Le moteur de l'éditeur (packages/engine) se compile depuis crates/engine-wasm.
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:

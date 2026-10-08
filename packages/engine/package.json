@@ -1,0 +1,25 @@
+{
+  "name": "@deep-atelier/engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Moteur de l'éditeur (crates/engine-wasm) compilé en WebAssembly, avec son wrapper TypeScript typé.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./engine_bg.wasm": "./pkg/engine_bg.wasm"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deep-atelier/ir-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

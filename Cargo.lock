@@ -444,6 +444,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "deep-atelier-engine-wasm"
+version = "0.1.0"
+dependencies = [
+ "deep-atelier-compiler-web",
+ "deep-atelier-ir",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "deep-atelier-ir"
 version = "0.1.0"
 dependencies = [
