@@ -781,8 +781,15 @@ consignée ici (question → décision, avec la date).
 **Avant (c)**
 
 7. Langue de l'interface de l'éditeur : français, anglais, ou i18n dès le départ ?
+   - **Décision (2026-10-08) : français et anglais dès le départ.** Chaque texte de l'interface
+     passe par un catalogue (un par langue) ; les deux sont tenus à jour à chaque PR et un test de
+     CI vérifie qu'ils ont les mêmes clés. Les codes d'erreur de l'IR et de l'API se traduisent par
+     ces catalogues.
 8. Build de l'app exportée dans l'éditeur (onglet Terminal) en Phase 1 ? Recommandation : non,
    build seulement à l'export, dans un job serveur.
+   - **Décision (2026-10-08) : non, build seulement à l'export.** Pas d'onglet Terminal en
+     Phase 1 : le canvas interprète l'IR (§ 10, point 5) ; le vrai `next build` tourne à l'export
+     (étape i), dans un job serveur sur le modèle du job CI `export`, et son rapport s'affiche.
 
 **Avant (f)**
 
