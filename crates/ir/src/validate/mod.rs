@@ -87,6 +87,26 @@ pub enum IssueCode {
     QualityEmptyContainer,
 }
 
+impl IssueCode {
+    /// Problème d'intégrité : version, cible, identifiants, arbre ou références incohérents. Un
+    /// tel document ne se charge, ne se rend ni ne se compile de façon sûre ; l'API refuse de
+    /// l'enregistrer. Les commandes ne peuvent pas en produire.
+    pub fn is_integrity(self) -> bool {
+        matches!(
+            self,
+            Self::InvalidVersion
+                | Self::NoWebTarget
+                | Self::NoPage
+                | Self::DuplicateId
+                | Self::TreeInconsistent
+                | Self::OrphanNode
+                | Self::Cycle
+                | Self::InvalidReference
+                | Self::RecursiveComponent
+        )
+    }
+}
+
 /// Problème détecté.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 pub struct Issue {
