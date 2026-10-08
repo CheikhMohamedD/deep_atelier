@@ -766,7 +766,8 @@ consignée ici (question → décision, avec la date).
 
 6. Projet Supabase hébergé : organisation, région, offre.
    - **Décision (2026-10-08) : nouveau projet, offre Free, région `eu-west-3` (Paris)**, dans
-     l'organisation du propriétaire. Limites acceptées pour développer le MVP : 500 Mo de base,
+     une organisation dédiée « Deep Atelier », créée pour lui (choix du propriétaire, plutôt que
+     son organisation existante). Limites acceptées pour développer le MVP : 500 Mo de base,
      1 Go de fichiers, pas de sauvegardes, pause après une semaine sans activité. Passage en Pro
      sans migration quand de vrais utilisateurs arrivent. Ni l'organisation ni l'id du projet
      n'apparaissent dans le dépôt.
@@ -801,7 +802,10 @@ consignée ici (question → décision, avec la date).
   Playwright) : ajouté au script de setup de l'environnement cloud à l'étape (c), pour être mis en
   cache. Les téléchargements de releases GitHub d'autres dépôts sont bloqués : `wasm-bindgen-cli`
   s'installe par `cargo install`, à la version exacte de la crate `wasm-bindgen`.
-- **Supabase hébergé**, pas de Docker local. Le projet est créé à l'étape (b2). L'accès réseau
+- **Supabase hébergé**, pas de Docker local. Le projet est créé à l'étape (b2).
+  - **Complément (2026-10-08)** : Docker et la CLI Supabase sont installés sur le poste local ; le
+    stack Supabase local sert au développement et aux tests de l'API (§ 16), le projet hébergé
+    reste la cible. L'accès réseau
   « Trusted » des sessions cloud n'inclut pas Supabase : à l'étape (b2), passer l'environnement en
   « Custom » (liste par défaut + `*.supabase.co`, `api.supabase.com`).
 - **Secrets** : jamais dans le dépôt (il est public). Ils vont dans les variables d'environnement
@@ -1062,3 +1066,70 @@ de fichiers prévue au § 2 ; `tools/export-check/` s'ajoute à l'arborescence (
 15. Une étiquette posée sur un nœud rendu en élément générique (`div`, `span`) ou en paragraphe est
     émise telle quelle, alors qu'ARIA 1.2 interdit de nommer ces rôles (audit Lighthouse
     `aria-prohibited-attr`). La validation de l'IR ne le signale pas encore.
+
+---
+
+## 16. Étape (b2) : API et Supabase (2026-10-08)
+
+**Projet hébergé.** Organisation « Deep Atelier », projet `deep-atelier`, offre Free, région
+`eu-west-3` (décision 6), créés avec la CLI Supabase. Le mot de passe de la base est généré sur le
+poste et rangé dans `.env` (non versionné) ; le schéma est appliqué par `supabase db push`. Ni
+l'organisation ni le projet ne sont identifiés dans le dépôt.
+
+**Base** (`supabase/migrations/…_projects.sql`)
+
+1. `projects`, `project_documents` (IR en `jsonb`, `version` pour la concurrence optimiste,
+   `ir_version`) et `document_versions` (numérotées par projet ; `origin` `user | ai | restore` ;
+   message obligatoire, sauf pour une version `restore`, qui porte `restored_from`). `assets`,
+   `ai_runs`, `plans` et `usage_monthly` (§ 9) arriveront avec les étapes qui s'en servent.
+2. Droits : l'API, avec le rôle propriétaire des tables, est le seul écrivain. Le rôle
+   `authenticated` lit seulement ses propres lignes (RLS, `(select auth.uid())`), `anon` n'a aucun
+   droit. Vérifié de bout en bout par PostgREST avec de vrais jetons.
+
+**API** (`crates/api`, Axum ; routes dans `src/routes/mod.rs`)
+
+3. Authentification : l'API vérifie le jeton d'accès Supabase avec le JWKS du projet. Les
+   projets récents signent en ES256 (vérifié sur le projet hébergé) ; RS256 est accepté, HS256
+   refusé. Contrôles : émetteur `<SUPABASE_URL>/auth/v1`, audience et rôle `authenticated`,
+   expiration (30 s de tolérance). Les clés restent 10 minutes en cache et sont rechargées pour un
+   `kid` inconnu, au plus une fois toutes les 30 secondes. Des clés injoignables donnent 503, pas
+   401, pour ne pas déconnecter l'éditeur.
+4. Sauvegarde automatique : le client envoie tout le document avec `base_version`. Si un autre
+   onglet a enregistré entre-temps, la réponse est 409 `VERSION_CONFLICT` avec `current_version`.
+   Un verrou sur la ligne du projet sérialise ses écritures (deux sauvegardes simultanées : une
+   seule passe).
+5. Contrôle du document : migration (`ir::migrate`), puis intégrité (`IssueCode::is_integrity` :
+   version, cible web, page, identifiants, arbre, références, composant récursif). Seuls ces
+   problèmes bloquent (422 `INVALID_DOCUMENT`, avec les problèmes). L'accessibilité ou la qualité
+   n'empêchent jamais d'enregistrer un travail en cours. Le document est stocké sous sa forme
+   normalisée, et le contrôle tourne hors du runtime (`spawn_blocking`).
+6. Versions : instantané du document courant, avec un message et un nom facultatif. La
+   restauration demande `base_version` et garde d'abord l'état courant comme version `restore` :
+   rien n'est perdu. L'interface compose le libellé d'une version `restore`, donc aucun texte
+   d'interface n'est stocké en base.
+7. Réponses d'erreur `{ "error": { "code", "message" } }`, en anglais, avec des codes stables.
+   Le projet d'un autre utilisateur répond 404, ce qui ne révèle pas son existence. Corps limité
+   à 10 Mio ; CORS limité aux origines de l'éditeur ; une panique donne 500.
+
+**Développement et tests**
+
+8. Stack Supabase local (CLI, Docker) avec une clé ES256 générée une fois par poste, non
+   versionnée : les jetons locaux ont la même forme que ceux du projet hébergé. En local, le lien
+   magique arrive dans Mailpit ; GitHub demande une OAuth App de développement
+   (`supabase/config.toml`).
+9. Tests d'intégration, ignorés par défaut, contre le stack local et avec de vrais jetons de
+   Supabase Auth : isolation entre utilisateurs, concurrence optimiste, documents refusés ou
+   acceptés, versions et restauration, droits directs via PostgREST. Le job CI `api` les lance.
+
+**Limites connues**
+
+10. Pas d'écran de connexion avant l'éditeur (étape c, après la question 7). Sur le projet
+    hébergé, la connexion GitHub attend l'OAuth App du propriétaire, et les URL de redirection
+    attendent l'adresse de l'éditeur.
+11. Aucun test ne tourne encore avec un jeton du projet hébergé, faute d'écran pour l'obtenir ;
+    son JWKS est en ES256, comme le stack local.
+12. L'API n'est pas déployée. Sur la base hébergée, elle passe par le pooler en mode session avec
+    `sslmode=require` : la connexion est chiffrée mais le certificat n'est pas vérifié. La
+    vérification (autorité de certification de Supabase) est à ajouter au déploiement.
+13. Chaque sauvegarde envoie et enregistre le document entier, sans différentiel : suffisant pour
+    le MVP, à revoir pour les gros documents.
