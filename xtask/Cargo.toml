@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 ir = { package = "deep-atelier-ir", path = "../crates/ir" }
 compiler-web = { package = "deep-atelier-compiler-web", path = "../crates/compiler-web" }
+api = { package = "deep-atelier-api", path = "../crates/api" }
 ts-rs.workspace = true
 
 [lints]

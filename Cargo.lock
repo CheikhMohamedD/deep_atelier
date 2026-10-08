@@ -428,6 +428,7 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+ "ts-rs",
  "uuid",
 ]
 
@@ -2909,6 +2910,7 @@ checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
 dependencies = [
  "thiserror",
  "ts-rs-macros",
+ "uuid",
 ]
 
 [[package]]
@@ -3278,6 +3280,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "deep-atelier-api",
  "deep-atelier-compiler-web",
  "deep-atelier-ir",
  "ts-rs",

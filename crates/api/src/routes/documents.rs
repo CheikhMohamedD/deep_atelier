@@ -2,8 +2,6 @@
 
 use axum::Json;
 use axum::extract::State;
-use serde::Deserialize;
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::AppState;
@@ -12,14 +10,7 @@ use crate::db::{self, DocumentState, Saved};
 use crate::document;
 use crate::error::ApiError;
 use crate::extract::{ApiPath, Body};
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SaveDocument {
-    /// Version que la sauvegarde remplace.
-    base_version: i64,
-    document: Value,
-}
+use crate::schema::SaveDocument;
 
 pub async fn get(
     State(state): State<AppState>,

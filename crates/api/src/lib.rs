@@ -12,6 +12,7 @@ pub mod document;
 pub mod error;
 pub mod extract;
 pub mod routes;
+pub mod schema;
 
 use std::any::Any;
 use std::sync::Arc;

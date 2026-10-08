@@ -6,7 +6,8 @@ use axum::http::header::WWW_AUTHENTICATE;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use ir::Issue;
-use serde_json::json;
+
+use crate::schema::{ErrorBody, ErrorDetail};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -80,13 +81,21 @@ impl IntoResponse for ApiError {
             Self::Unavailable(message) => tracing::warn!(%message, "service unavailable"),
             _ => {}
         }
-        let mut error = json!({ "code": self.code(), "message": self.to_string() });
-        match &self {
-            Self::VersionConflict { current_version, .. } => error["current_version"] = json!(current_version),
-            Self::InvalidDocument { issues, .. } if !issues.is_empty() => error["issues"] = json!(issues),
-            _ => {}
-        }
-        let mut response = (status, Json(json!({ "error": error }))).into_response();
+        let body = ErrorBody {
+            error: ErrorDetail {
+                code: self.code().to_owned(),
+                message: self.to_string(),
+                current_version: match &self {
+                    Self::VersionConflict { current_version, .. } => Some(*current_version),
+                    _ => None,
+                },
+                issues: match &self {
+                    Self::InvalidDocument { issues, .. } if !issues.is_empty() => Some(issues.clone()),
+                    _ => None,
+                },
+            },
+        };
+        let mut response = (status, Json(body)).into_response();
         if status == StatusCode::UNAUTHORIZED {
             response
                 .headers_mut()
@@ -99,7 +108,7 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use axum::body::to_bytes;
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
     use super::*;
 

@@ -1,6 +1,6 @@
 //! Tâches du dépôt.
 //!
-//! - `cargo xtask codegen` : écrit les types TypeScript de l'IR et du canvas (ts-rs) dans
+//! - `cargo xtask codegen` : écrit les types TypeScript de l'IR, du canvas et de l'API (ts-rs) dans
 //!   `packages/ir-types/src/generated`, et leur index `packages/ir-types/src/index.ts`.
 //! - `cargo xtask codegen --check` : échoue si les fichiers versionnés ne correspondent plus aux
 //!   types Rust (CI). Ces fichiers ne s'éditent jamais à la main.
@@ -54,6 +54,24 @@ fn generate(scratch: &Path) -> Result<BTreeMap<PathBuf, String>, String> {
     export(ir::ChangeSet::export_all(&cfg))?;
     export(ir::ChangeUnit::export_all(&cfg))?;
     export(compiler_web::canvas::CanvasPage::export_all(&cfg))?;
+    // Contrat de l'API (crates/api/src/schema.rs).
+    {
+        use api::schema::*;
+        export(Health::export_all(&cfg))?;
+        export(NewProject::export_all(&cfg))?;
+        export(ProjectPatch::export_all(&cfg))?;
+        export(SaveDocument::export_all(&cfg))?;
+        export(NewVersion::export_all(&cfg))?;
+        export(Restore::export_all(&cfg))?;
+        export(ProjectList::export_all(&cfg))?;
+        export(ProjectResponse::export_all(&cfg))?;
+        export(CreatedProject::export_all(&cfg))?;
+        export(VersionList::export_all(&cfg))?;
+        export(VersionResponse::export_all(&cfg))?;
+        export(VersionDetail::export_all(&cfg))?;
+        export(Restored::export_all(&cfg))?;
+        export(ErrorBody::export_all(&cfg))?;
+    }
 
     let mut files = BTreeMap::new();
     collect(scratch, scratch, &mut files)?;

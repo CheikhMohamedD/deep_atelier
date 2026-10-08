@@ -2,7 +2,7 @@
   "name": "@deep-atelier/ir-types",
   "version": "0.0.0",
   "private": true,
-  "description": "Types TypeScript de l'IR et du canvas, générés par `cargo xtask codegen` : ne pas modifier.",
+  "description": "Types TypeScript générés depuis Rust (IR, canvas, contrat de l'API) par `cargo xtask codegen` : ne pas modifier.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
