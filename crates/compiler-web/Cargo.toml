@@ -1,0 +1,21 @@
+[package]
+name = "deep-atelier-compiler-web"
+version = "0.1.0"
+description = "Compilateur web de Deep Atelier : IR → projet Next.js (TSX + Tailwind)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+name = "compiler_web"
+
+[dependencies]
+ir = { package = "deep-atelier-ir", path = "../ir" }
+serde_json.workspace = true
+unicode-width = "0.2.2"
+
+[dev-dependencies]
+insta = "1.49.0"
+
+[lints]
+workspace = true

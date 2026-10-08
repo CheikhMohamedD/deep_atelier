@@ -1,0 +1,64 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import Link from "next/link";
+import { twMerge } from "tailwind-merge";
+
+type PricingCardProps = {
+  name?: string;
+  price?: string;
+  description?: string;
+  cta?: string;
+  tone?: "standard" | "featured";
+  className?: string;
+};
+
+const toneTextClasses = {
+  standard: "",
+  featured: "text-primary-foreground/80",
+} as const;
+
+const toneLinkClasses = {
+  standard: "",
+  featured: "text-foreground bg-background",
+} as const;
+
+const toneClasses = {
+  standard: "",
+  featured: "text-primary-foreground bg-primary border-primary",
+} as const;
+
+export function PricingCard({
+  name = "Offre",
+  price = "0 €",
+  description = "Description de l'offre",
+  cta = "Choisir",
+  tone = "standard",
+  className,
+}: PricingCardProps) {
+  return (
+    <li
+      className={twMerge(
+        "flex flex-col gap-4 p-8 bg-card border border-border rounded-2xl",
+        toneClasses[tone],
+        className,
+      )}
+    >
+      <h3 className="text-lg font-semibold">{name}</h3>
+      <p className="text-4xl font-bold tracking-tight">{price}</p>
+      <p className={twMerge("text-muted-foreground", toneTextClasses[tone])}>
+        {description}
+      </p>
+      <Link
+        href="/#contact"
+        className={twMerge(
+          "px-6 py-3 font-medium text-center text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          toneLinkClasses[tone],
+        )}
+      >
+        {cta}
+      </Link>
+    </li>
+  );
+}

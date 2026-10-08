@@ -1,0 +1,52 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+"use client";
+
+import Link from "next/link";
+import { useId, useState } from "react";
+import { MenuIcon } from "lucide-react";
+
+export function Menu() {
+  const [menuPrincipalOpen, setMenuPrincipalOpen] = useState(false);
+  const menuPrincipalId = useId();
+  return (
+    <div className="flex flex-wrap gap-4 items-center justify-between max-w-6xl mx-auto px-4 py-3">
+      <Link
+        href="/"
+        className="text-lg font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      >
+        Deep Atelier
+      </Link>
+      <button
+        type="button"
+        aria-expanded={menuPrincipalOpen}
+        aria-controls={menuPrincipalId}
+        onClick={() => setMenuPrincipalOpen(!menuPrincipalOpen)}
+        aria-label="Menu"
+        className="p-2 rounded-md md:hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      >
+        <MenuIcon aria-hidden="true" className="w-6 h-6" />
+      </button>
+      <nav
+        id={menuPrincipalId}
+        data-open={menuPrincipalOpen}
+        className="hidden flex-col gap-4 w-full md:flex md:flex-row md:gap-6 md:w-auto data-[open=true]:flex"
+      >
+        <Link
+          href="/#features"
+          className="text-sm text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Fonctionnalités
+        </Link>
+        <Link
+          href="/#pricing"
+          className="text-sm text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Tarifs
+        </Link>
+      </nav>
+    </div>
+  );
+}
