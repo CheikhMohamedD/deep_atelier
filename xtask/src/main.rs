@@ -4,6 +4,8 @@
 //!   `packages/ir-types/src/generated`, et leur index `packages/ir-types/src/index.ts`.
 //! - `cargo xtask codegen --check` : échoue si les fichiers versionnés ne correspondent plus aux
 //!   types Rust (CI). Ces fichiers ne s'éditent jamais à la main.
+//! - `cargo xtask demo <landing|kitchen> <fichier>` : écrit un document de démonstration en JSON
+//!   (projets des tests de bout en bout de l'éditeur).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -20,8 +22,9 @@ fn main() -> ExitCode {
     let check = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["codegen"] => false,
         ["codegen", "--check"] => true,
+        ["demo", name, path] => return demo(name, Path::new(path)),
         _ => {
-            eprintln!("usage: cargo xtask codegen [--check]");
+            eprintln!("usage: cargo xtask codegen [--check] | cargo xtask demo <landing|kitchen> <file>");
             return ExitCode::FAILURE;
         }
     };
@@ -29,6 +32,38 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("{message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Écrit un document de démonstration (`compiler_web::demo`) en JSON.
+fn demo(name: &str, path: &Path) -> ExitCode {
+    let doc = match name {
+        "landing" => compiler_web::demo::landing(),
+        "kitchen" => compiler_web::demo::kitchen_sink(),
+        other => {
+            eprintln!("unknown demo `{other}` (landing, kitchen)");
+            return ExitCode::FAILURE;
+        }
+    };
+    let json = match serde_json::to_string(&doc) {
+        Ok(json) => json,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        eprintln!("{}: {e}", parent.display());
+        return ExitCode::FAILURE;
+    }
+    match fs::write(path, json) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{}: {e}", path.display());
             ExitCode::FAILURE
         }
     }
@@ -71,6 +106,8 @@ fn generate(scratch: &Path) -> Result<BTreeMap<PathBuf, String>, String> {
         export(VersionDetail::export_all(&cfg))?;
         export(Restored::export_all(&cfg))?;
         export(ErrorBody::export_all(&cfg))?;
+        // Réponse de `PUT /projects/{id}/document`.
+        export(api::db::Saved::export_all(&cfg))?;
     }
 
     let mut files = BTreeMap::new();

@@ -3283,6 +3283,7 @@ dependencies = [
  "deep-atelier-api",
  "deep-atelier-compiler-web",
  "deep-atelier-ir",
+ "serde_json",
  "ts-rs",
 ]
 

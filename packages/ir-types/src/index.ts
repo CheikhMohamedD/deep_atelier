@@ -117,6 +117,7 @@ export type * from "./generated/Ring";
 export type * from "./generated/RingWidth";
 export type * from "./generated/RouteSegment";
 export type * from "./generated/SaveDocument";
+export type * from "./generated/Saved";
 export type * from "./generated/Scale";
 export type * from "./generated/Scope";
 export type * from "./generated/Seo";
