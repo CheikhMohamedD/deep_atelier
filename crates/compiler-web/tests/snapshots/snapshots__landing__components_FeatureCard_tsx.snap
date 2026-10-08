@@ -1,0 +1,23 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import { ZapIcon } from "lucide-react";
+
+type FeatureCardProps = {
+  title?: string;
+  description?: string;
+};
+
+export function FeatureCard({
+  title = "Titre",
+  description = "Description",
+}: FeatureCardProps) {
+  return (
+    <li className="p-6 bg-card border border-border rounded-xl">
+      <ZapIcon aria-hidden="true" className="w-6 h-6 text-primary" />
+      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-muted-foreground">{description}</p>
+    </li>
+  );
+}

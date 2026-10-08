@@ -1,0 +1,37 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+"use client";
+
+import { useId, useState } from "react";
+import { twMerge } from "tailwind-merge";
+
+type DisclosureProps = {
+  className?: string;
+};
+
+export function Disclosure({ className }: DisclosureProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
+  return (
+    <div className={twMerge("flex flex-col gap-2", className)}>
+      <button
+        type="button"
+        aria-expanded={detailsOpen}
+        aria-controls={detailsId}
+        onClick={() => setDetailsOpen(!detailsOpen)}
+        className="px-3 py-2 border border-border rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      >
+        Afficher les détails
+      </button>
+      <div
+        id={detailsId}
+        data-open={detailsOpen}
+        className="hidden data-[open=true]:block"
+      >
+        <p>Les détails apparaissent au clic.</p>
+      </div>
+    </div>
+  );
+}

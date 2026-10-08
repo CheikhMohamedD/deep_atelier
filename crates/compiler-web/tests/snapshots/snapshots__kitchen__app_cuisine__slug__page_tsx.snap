@@ -1,0 +1,159 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+import { Badge } from "@/components/Badge";
+import { Disclosure } from "@/components/Disclosure";
+import { Panel } from "@/components/Panel";
+import { Profile } from "@/components/Profile";
+import { Bonjour } from "@/components/raw/Bonjour";
+
+export const metadata: Metadata = {
+  title: "Cuisine",
+  description: "Toutes les constructions du compilateur.",
+  openGraph: { images: ["/assets/a_0000000002-partage.jpg"] },
+};
+
+export default function CuisinePage() {
+  return (
+    <main className="max-w-5xl mx-auto px-4 py-12">
+      <h1 className="font-display text-4xl font-bold lg:text-5xl">
+        La cuisine du compilateur
+      </h1>
+      <p className="mt-4 text-muted-foreground">
+        L&apos;outil &quot;simple&quot; &amp; rapide &lt; &gt; &#123; &#125; :
+        lancez <code>pnpm build</code> puis{" "}
+        <strong>
+          <em>tout</em>
+        </strong>{" "}
+        s&apos;affiche en <span className="text-primary">couleur</span>.<br />
+        Une nouvelle ligne suit le saut, avec une phrase assez longue pour que
+        Prettier la remplisse sur plusieurs lignes.
+      </p>
+      <div className="grid grid-cols-1 gap-4 mt-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="aspect-video bg-linear-to-br from-primary via-accent to-secondary rounded-xl shadow-md md:col-span-2" />
+        <div className="relative min-h-24 bg-muted rounded-xl">
+          <Badge label="Bêta" className="absolute right-2 top-2 z-10" />
+        </div>
+        <div className="hidden bg-secondary rounded-xl opacity-50 md:block" />
+      </div>
+      <Panel
+        id="panneau"
+        heading="Panneau compact"
+        density="compact"
+        aside={
+          <>
+            <p>Note en marge.</p>
+            <a
+              href="#panneau"
+              className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              Plus d&apos;infos
+            </a>
+          </>
+        }
+        className="mt-8"
+      >
+        <p>Contenu principal du panneau.</p>
+      </Panel>
+      <Panel
+        showHeading={false}
+        aside={<p>Une seule note.</p>}
+        aria-label="Panneau secondaire"
+        className="mt-4"
+      />
+      <div className="flex gap-2 mt-4">
+        <Badge show={false} />
+        <Badge label="Stable" />
+      </div>
+      <Profile
+        photo="https://images.example.com/portraits/ada.jpg"
+        photoAlt="Portrait d'Ada"
+        url="https://example.com/ada"
+        linkLabel="Ada Lovelace"
+        data-testid="profil"
+        className="mt-6"
+      />
+      <Disclosure className="mt-6" />
+      <nav
+        aria-label="Liens utiles"
+        className="flex flex-col gap-4 mt-6 sm:flex-row"
+      >
+        <a
+          href="https://example.com/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Documentation
+        </a>
+        <a
+          href="tel:+33123456789"
+          className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Appeler
+        </a>
+        <a
+          href="mailto:bonjour@example.com"
+          className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Écrire
+        </a>
+        <Link
+          href="/"
+          className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Accueil
+        </Link>
+        <a
+          href="#panneau"
+          className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Panneau
+        </a>
+      </nav>
+      <form
+        action="https://example.com/newsletter"
+        method="get"
+        className="flex flex-col gap-2 max-w-sm mt-8"
+      >
+        <label htmlFor="full-name">Nom complet</label>
+        <input
+          type="text"
+          id="full-name"
+          name="full name"
+          autoComplete="name"
+          className="px-3 py-2 border border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        />
+        <label htmlFor="message">Message</label>
+        <textarea
+          id="message"
+          name="message"
+          placeholder="Votre message…"
+          className="px-3 py-2 border border-border focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        />
+        <button
+          type="submit"
+          className="px-4 py-2 text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          Envoyer
+        </button>
+      </form>
+      <time dateTime="2026-10-08">8 octobre 2026</time>
+      <Bonjour />
+      <Image
+        src="/assets/a_0000000001-logo-atelier.png"
+        alt="Logo de l'atelier"
+        width={64}
+        height={64}
+        className="w-16 mt-6"
+      />
+      <p data-testid="escape" className="underline-offset-4">
+        Texte avec échappatoires web.
+      </p>
+    </main>
+  );
+}

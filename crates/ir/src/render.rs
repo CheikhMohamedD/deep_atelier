@@ -7,10 +7,11 @@
 
 use std::collections::BTreeSet;
 
+use crate::command::neutral::neutral_value;
 use crate::document::{BindableField, Document, Owner, Page};
 use crate::id::{ComponentId, NodeId};
 use crate::node::{ContainerKind, DEFAULT_SLOT, Node, NodeKind, PAGE_SLOT, PropValue};
-use crate::style::style::StyleProp;
+use crate::style::style::{PropChange, Style, StyleProp};
 
 /// Au-delà de ce multiple du nombre de nœuds du document, le rendu d'une page est interrompu
 /// (composants qui s'imbriquent de façon exponentielle) et marqué [`RenderTree::truncated`].
@@ -250,6 +251,39 @@ pub fn default_bound<'d>(doc: &'d Document, node: &NodeId, field: BindableField)
         .iter()
         .find(|p| &p.binding.node == node && p.binding.field == field)
         .map(|p| &p.default)
+}
+
+/// Style d'un nœud rendu dans le composant de l'instance la plus interne de `frames`, avec les
+/// surcharges des variantes que l'instance choisit (option par défaut sinon) ; `None` si aucune
+/// surcharge ne vise le nœud.
+pub fn variant_style(doc: &Document, frames: &[NodeId], node: &Node) -> Option<Style> {
+    let instance = doc.node(frames.last()?)?;
+    let NodeKind::ComponentInstance(props) = &instance.kind else {
+        return None;
+    };
+    let component = doc.component(&props.component)?;
+    let mut style: Option<Style> = None;
+    for axis in &component.variants {
+        let chosen = props
+            .variants
+            .iter()
+            .find(|v| v.axis == axis.name)
+            .map_or(&axis.default, |v| &v.option);
+        let Some(option) = axis.options.iter().find(|o| &o.name == chosen) else {
+            continue;
+        };
+        for over in option.overrides.iter().filter(|o| o.node == node.id) {
+            let style = style.get_or_insert_with(|| node.style.clone());
+            for (prop, change) in over.style.entries() {
+                let PropChange::Merge(patch) = change else { continue };
+                let current = style.get(prop).ok().flatten();
+                if let Ok(Some(value)) = patch.apply(current, || neutral_value(doc, &node.id, None, prop)) {
+                    let _ = style.set(prop, Some(value));
+                }
+            }
+        }
+    }
+    style
 }
 
 // ---------------------------------------------------------------- style permis selon l'hôte

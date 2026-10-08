@@ -1,0 +1,46 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import { useId } from "react";
+import { twMerge } from "tailwind-merge";
+
+type NewsletterFormProps = {
+  title?: string;
+  submitLabel?: string;
+  className?: string;
+};
+
+export function NewsletterForm({
+  title = "Restez informé",
+  submitLabel = "S'inscrire",
+  className,
+}: NewsletterFormProps) {
+  const emailId = useId();
+  return (
+    <form
+      method="post"
+      className={twMerge("flex flex-col gap-4 max-w-md", className)}
+    >
+      <h2 className="text-2xl font-bold">{title}</h2>
+      <label htmlFor={emailId} className="text-sm font-medium">
+        Adresse e-mail
+      </label>
+      <input
+        type="email"
+        id={emailId}
+        name="email"
+        placeholder="vous@exemple.fr"
+        autoComplete="email"
+        required
+        className="px-3 py-2 bg-background border border-border rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      />
+      <button
+        type="submit"
+        className="px-4 py-2 font-medium text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      >
+        {submitLabel}
+      </button>
+    </form>
+  );
+}

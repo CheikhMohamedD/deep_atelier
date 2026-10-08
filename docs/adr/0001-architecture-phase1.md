@@ -784,6 +784,8 @@ consignée ici (question → décision, avec la date).
   réservés). Commits signés de l'adresse noreply GitHub du propriétaire (voir `CLAUDE.md`).
 - **Développement dans des sessions Claude Code cloud**, rien n'est installé sur le poste local.
   L'image cloud fournit rustc/cargo, Node 22 avec pnpm, Docker et PostgreSQL 16.
+  - **Complément (2026-10-07)** : le développement se fait aussi en local (rustup avec la toolchain
+    du dépôt, Node, pnpm). Une seule session, locale ou cloud, travaille sur une branche à la fois.
 - **Outillage complémentaire** (cible `wasm32-unknown-unknown`, `wasm-bindgen-cli`, navigateurs
   Playwright) : ajouté au script de setup de l'environnement cloud à l'étape (c), pour être mis en
   cache. Les téléchargements de releases GitHub d'autres dépôts sont bloqués : `wasm-bindgen-cli`
@@ -935,3 +937,117 @@ confirmé est couvert par `crates/ir/tests/regressions_validate_schema_render.rs
       tactile se juge sur sa taille et ses minimums ; `a11y.hidden` masque tout le rendu du nœud ;
       l'alt d'une image nomme son bouton ou son lien ; une instance ne nomme un bouton que par son
       contenu rendu.
+
+---
+
+## 15. Étape (b) : compilateur web (2026-10-08)
+
+`crates/compiler-web` : `compile(&Document, Mode) -> Project` produit un projet Next.js 16 complet
+(App Router, TypeScript strict, Tailwind v4) qui ne dépend pas de Deep Atelier. Modules : `plan`
+(noms, îlots clients, assets, hôtes d'images), `elements` (nœuds → JSX), `classes` (style →
+classes), `theme` (tokens → CSS), `project` (assemblage et gabarit), `doc`, `jsx` et `module`
+(impression façon Prettier), `names`, `demo` (documents de démonstration). Ils remplacent la liste
+de fichiers prévue au § 2 ; `tools/export-check/` s'ajoute à l'arborescence (point 12).
+
+**Projet exporté**
+
+1. Arborescence :
+   - `app/layout.tsx` : `<html lang>`, polices `next/font/google`, titre et favicon du site ;
+     `app/globals.css` (point 6) ; `app/icon.svg` quand aucun favicon n'est choisi (initiale du
+     site sur `primary`, pour éviter un `favicon.ico` en 404) ;
+   - un groupe de routes par layout de l'IR : `app/(<layout>)/layout.tsx`, où le slot `page`
+     devient `{children}` ; chaque page sous son groupe (`app/(<layout>)/<route>/page.tsx`,
+     segments dynamiques `[slug]`), avec ses métadonnées (titre, description, image OG) ;
+   - `components/<Nom>.tsx` par composant ou îlot client (point 4), `components/raw/<Nom>.tsx` par
+     bloc de code libre client ;
+   - `public/assets/<id>-<fichier>` (contenu copié depuis le stockage par l'export, étape i) et
+     `public/placeholders/*.svg` (images de remplissage) ;
+   - configuration du gabarit `create-next-app` 16.4 : `package.json` aux versions exactes (`next`,
+     `react`, `react-dom`, et `lucide-react` 1.52.0 comme le catalogue de l'IR ; `lucide-react` et
+     `tailwind-merge` seulement s'ils servent), `tsconfig.json`, `eslint.config.mjs`,
+     `next.config.ts` (hôtes des images distantes dans `images.remotePatterns`),
+     `pnpm-workspace.yaml`, `.gitignore`, `AGENTS.md`, `README.md`. Pas de `pnpm-lock.yaml` : il
+     est créé au premier `pnpm install`.
+2. Mise en forme : le code sort tel que Prettier 3.9.9 (réglages par défaut) l'écrirait.
+   L'imprimeur de documents de Prettier est porté en Rust (`doc.rs` : groupes, `fill`,
+   `conditionalGroup`, propagation des sauts, largeur 80 en colonnes Unicode), avec ses règles JSX,
+   d'objets, de tableaux et d'imports (`jsx.rs`, `module.rs`). Seul le code libre est repris tel
+   qu'écrit, réindenté.
+3. Composants : une fonction nommée par composant, props typées (`type <Nom>Props`) et défauts
+   dans la déstructuration ; variantes : union de littéraux et une table de classes par nœud visé
+   (`const toneClasses = {…} as const`) ; slots : props `ReactNode` (`children` pour le slot par
+   défaut) ; prop `Visible` : `if (!show) return null` sur la racine, `{show && …}` ailleurs. Selon
+   les instances, le composant accepte aussi :
+   - `className` (instance stylée, ou variantes sur la racine), fusionné par `twMerge`
+     (décision 5) ;
+   - `id` (instance ancrée), posé sur la racine ;
+   - `...rest`, typé `AriaAttributes` et étalé sur la racine, quand une instance porte une
+     étiquette, un masquage ou des attributs `data-*` / `aria-*` : ils s'appliquent à la racine
+     rendue, comme le supposent la validation et le détachement d'instance.
+4. Interactivité : un bouton `toggle` produit `useState`, `aria-expanded`, `aria-controls` (ancre
+   de la cible ou `useId`) et `onClick` ; sa cible porte `data-open` et la variante
+   `data-[open=true]:<affichage>`, qui l'affiche là où elle est masquée fermée. Dans une page ou un
+   layout, seul le plus petit sous-arbre qui contient les boutons et leurs cibles devient client :
+   un îlot (`components/Menu.tsx`, nommé d'après son rôle), le reste de la page reste rendu côté
+   serveur ; un îlot qui contient le slot `page` reçoit `children`. Un composant qui contient une
+   bascule est client en entier.
+5. Classes : base, puis `sm:` à `2xl:`, puis états ; dans chaque bloc, ordre fixe par famille
+   (affichage, disposition, placement, position, dimensions, marges, typographie, apparence,
+   transitions) ; côtés regroupés (`p-4`, `px-4 py-2`). Une base égale à la valeur initiale CSS
+   d'une propriété non héritée n'est pas émise (§ 14, point 3) ; une propriété héritée l'est
+   toujours, car un composant ou un contenu de slot n'hérite pas, au rendu, des ancêtres où il est
+   écrit.
+6. Thème : couleurs en variables CSS sur `:root`, valeurs sombres sous
+   `@media (prefers-color-scheme: dark)` (décision 4), exposées par `@theme inline` (`bg-primary`,
+   `font-display`) ; crans de rayon, d'ombre et d'espacement dans `@theme` seulement s'ils
+   diffèrent de ceux de Tailwind.
+7. Éléments : balise du rôle de chaque nœud ; `next/link` pour les liens internes, `<a>` pour les
+   autres (`rel="noopener noreferrer"` en nouvel onglet) ; `next/image` avec les dimensions
+   intrinsèques, `preload` pour l'image prioritaire (`priority` est déprécié en Next 16),
+   `unoptimized` pour un SVG ; icônes `lucide-react` (`aria-hidden`, ou `role="img"` et
+   `aria-label`) ; champ lié à son étiquette par `htmlFor` (id fixe dans une page, `useId` dans un
+   composant ou un îlot).
+8. Code libre : un `RawCode` serveur est inséré tel quel avec ses imports ; un `RawCode` client
+   devient `components/raw/<Nom>.tsx` (`"use client"`). Il doit suivre les règles de Next 16 avec
+   `cacheComponents` (par exemple, pas de `new Date()` au rendu hors d'un `Suspense`) : le
+   compilateur ne l'analyse pas avant l'étape (h).
+
+**Mode édition**
+
+9. `Mode::Edit` pose `data-atl-id` sur chaque élément, et chaque fichier donne la plage exacte de
+   l'élément de chaque nœud (`File::source_map`, en octets), pour le lien code ⇄ canvas des étapes
+   (g) et (h). `Mode::Export` ne laisse aucune trace de l'éditeur. Le canvas reste un interprète de
+   l'IR (§ 10, point 5) : il réutilisera `node_classes` et `RenderTree` à l'étape (c).
+
+**Validation**
+
+10. Contraste : chaque rendu applique les surcharges de la variante choisie par l'instance
+    (`render::variant_style`), comme `twMerge` à l'export. Le défaut a été révélé par Lighthouse
+    sur la landing de démonstration (description grise sur l'offre mise en avant) ; test
+    `crates/ir/tests/variant_contrast.rs`.
+
+**Vérification**
+
+11. Snapshots `insta` de chaque fichier de la landing de démonstration (`demo::landing`) et d'un
+    document « tout-en-un » (`demo::kitchen_sink` : slots nommés, variantes sur la racine et sur un
+    descendant, gardes `Visible`, composants client, props d'image et de lien, attributs transmis,
+    route dynamique, police Google, assets, code libre, nœud natif seul, échappatoires web).
+    S'y ajoutent la compilation déterministe et le mode édition (chaque nœud rendu a sa plage, et
+    chaque plage son `data-atl-id`).
+12. Job CI `export` : les tests écrivent les deux projets sur disque, puis `prettier --check`,
+    `pnpm build`, `pnpm lint`, et `tools/export-check/check.mjs` sur `next start` :
+    - aucun défilement horizontal à 390, 768 et 1280 px, en clair et en sombre ;
+    - aucune exception ni erreur d'hydratation (ni aucune erreur de console pour la landing) ;
+    - menu burger ouvert puis refermé à 390 px, remplacé par la navigation à 1280 px ;
+    - Lighthouse mobile ≥ 90 dans les quatre catégories, en clair et en sombre (landing de
+      démonstration : 99, 100, 100 et 100 en local).
+
+**Limites connues**
+
+13. `metadataBase` n'est pas défini (l'IR ne connaît pas l'URL du site) : Next l'avertit au build,
+    et l'URL de l'image OG est résolue sur `localhost`. À traiter avec le domaine de publication
+    (étape i).
+14. Les images de remplissage ne suivent pas le thème sombre.
+15. Une étiquette posée sur un nœud rendu en élément générique (`div`, `span`) ou en paragraphe est
+    émise telle quelle, alors qu'ARIA 1.2 interdit de nommer ces rôles (audit Lighthouse
+    `aria-prohibited-attr`). La validation de l'IR ne le signale pas encore.

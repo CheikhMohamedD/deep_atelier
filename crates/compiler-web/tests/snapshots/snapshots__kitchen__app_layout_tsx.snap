@@ -1,0 +1,26 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import type { Metadata } from "next";
+import { Playfair_Display } from "next/font/google";
+import "./globals.css";
+
+const playfairDisplay = Playfair_Display({
+  variable: "--next-font-playfair-display",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
+export const metadata: Metadata = {
+  title: "Atelier cuisine",
+  icons: { icon: "/assets/a_0000000001-logo-atelier.png" },
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html lang="fr" className={`${playfairDisplay.variable} antialiased`}>
+      <body>{children}</body>
+    </html>
+  );
+}

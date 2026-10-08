@@ -8,7 +8,8 @@ versionné et exportable. Le code édité à la main se reflète sur le canvas.
 
 ## État
 
-Phase 1 (MVP web) : étape (a) `crates/ir` livrée, prochaine étape (b) `crates/compiler-web`.
+Phase 1 (MVP web) : étapes (a) `crates/ir` et (b) `crates/compiler-web` livrées, prochaine étape
+(b2) `crates/api` + Supabase.
 
 - Spécifications : [`docs/SPEC.md`](docs/SPEC.md)
 - Architecture de la Phase 1 : [`docs/adr/0001-architecture-phase1.md`](docs/adr/0001-architecture-phase1.md)
@@ -22,18 +23,33 @@ cargo test
 cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
 ```
 
+Vérifier un projet exporté comme la CI (job `export`) : la landing de démonstration est écrite dans
+`$OUT`, construite, servie, puis contrôlée (viewports, menu, Lighthouse mobile) avec Chrome.
+
+```sh
+OUT=/tmp/deep-atelier-landing
+DEEP_ATELIER_EXPORT_DIR=$OUT cargo test -p deep-atelier-compiler-web --test demo
+(cd $OUT && pnpm dlx prettier@3.9.9 --check . && pnpm install && pnpm build && pnpm lint)
+(cd $OUT && pnpm start --port 3913) &
+(cd tools/export-check && pnpm install)
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  node tools/export-check/check.mjs --url http://localhost:3913 --paths /,/a-propos --menu Menu --lighthouse
+```
+
 ## Stack
 
 - Monorepo pnpm + Turborepo + workspace Cargo
 - Moteur en Rust (IR, compilateur web, parser TSX via oxc), compilé en WebAssembly pour l'éditeur
 - Backend Rust (Axum + Tokio), Supabase (Postgres, Auth, Storage)
 - Éditeur : Next.js 15, React 19, TypeScript strict, Tailwind v4, shadcn/ui, Zustand, dnd-kit, Monaco
+- Code exporté : Next.js 16 (App Router), React 19, TypeScript strict, Tailwind v4, mis en forme
+  comme Prettier
 - IA : outils = commandes de l'IR, Claude par défaut
 
 ## Feuille de route de la Phase 1
 
 - [x] (a) `crates/ir` : schéma, commandes, historique, validation
-- [ ] (b) `crates/compiler-web` : IR → TSX + Tailwind
+- [x] (b) `crates/compiler-web` : IR → TSX + Tailwind
 - [ ] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
 - [ ] (c) `crates/engine-wasm` + canvas en iframe
 - [ ] (d) Calques + inspecteur par breakpoint

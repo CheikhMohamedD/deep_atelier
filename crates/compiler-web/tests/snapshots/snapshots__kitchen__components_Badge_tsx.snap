@@ -1,0 +1,31 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import { twMerge } from "tailwind-merge";
+
+type BadgeProps = {
+  label?: string;
+  show?: boolean;
+  className?: string;
+};
+
+export function Badge({
+  label = "Nouveau",
+  show = true,
+  className,
+}: BadgeProps) {
+  if (!show) {
+    return null;
+  }
+  return (
+    <span
+      className={twMerge(
+        "px-2 py-0.5 text-xs font-medium text-accent-foreground bg-accent rounded-full transition-colors hover:text-primary-foreground hover:bg-primary",
+        className,
+      )}
+    >
+      {label}
+    </span>
+  );
+}
