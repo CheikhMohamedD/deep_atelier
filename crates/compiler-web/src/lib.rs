@@ -5,7 +5,10 @@
 //! - Le code est mis en forme comme Prettier 3 le ferait (imprimeur de [`doc`]).
 //! - En mode [`Mode::Edit`], chaque élément porte `data-atl-id` (lien code ⇄ canvas) ; chaque
 //!   fichier donne la plage de chaque nœud ([`File::source_map`]).
+//! - [`canvas::canvas_page`] : rendu d'une page pour le canvas de l'éditeur, avec les mêmes
+//!   classes que l'export.
 
+pub mod canvas;
 pub mod classes;
 pub mod demo;
 pub mod doc;

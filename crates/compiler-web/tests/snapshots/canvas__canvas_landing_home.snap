@@ -1,0 +1,861 @@
+---
+source: crates/compiler-web/tests/canvas.rs
+expression: json
+---
+{
+  "page": "p_jkxxq7urfh",
+  "lang": "fr",
+  "css": ":root {\n  --background: #ffffff;\n  --foreground: #0a0a0a;\n  --primary: #171717;\n  --primary-foreground: #fafafa;\n  --secondary: #f5f5f5;\n  --secondary-foreground: #171717;\n  --muted: #f5f5f5;\n  --muted-foreground: #737373;\n  --accent: #f5f5f5;\n  --accent-foreground: #171717;\n  --border: #e5e5e5;\n  --card: #ffffff;\n  --card-foreground: #0a0a0a;\n  --destructive: #e7000b;\n}\n\n@theme inline {\n  --color-background: var(--background);\n  --color-foreground: var(--foreground);\n  --color-primary: var(--primary);\n  --color-primary-foreground: var(--primary-foreground);\n  --color-secondary: var(--secondary);\n  --color-secondary-foreground: var(--secondary-foreground);\n  --color-muted: var(--muted);\n  --color-muted-foreground: var(--muted-foreground);\n  --color-accent: var(--accent);\n  --color-accent-foreground: var(--accent-foreground);\n  --color-border: var(--border);\n  --color-card: var(--card);\n  --color-card-foreground: var(--card-foreground);\n  --color-destructive: var(--destructive);\n}\n\n@media (prefers-color-scheme: dark) {\n  :root {\n    --background: #0a0a0a;\n    --foreground: #fafafa;\n    --primary: #e5e5e5;\n    --primary-foreground: #171717;\n    --secondary: #262626;\n    --secondary-foreground: #fafafa;\n    --muted: #262626;\n    --muted-foreground: #a1a1a1;\n    --accent: #262626;\n    --accent-foreground: #fafafa;\n    --border: #ffffff1a;\n    --card: #171717;\n    --card-foreground: #fafafa;\n    --destructive: #ff6467;\n  }\n}\n\nbody {\n  background: var(--background);\n  color: var(--foreground);\n}\n",
+  "font_stylesheets": [],
+  "nodes": [
+    {
+      "type": "element",
+      "key": "n_uc7muiu1gx",
+      "node": "n_uc7muiu1gx",
+      "tag": "header",
+      "class": "sticky top-0 z-40 bg-background border-b border-border",
+      "attrs": {},
+      "children": [
+        {
+          "type": "element",
+          "key": "n_cg2t1ep5l2",
+          "node": "n_cg2t1ep5l2",
+          "tag": "div",
+          "class": "flex flex-wrap gap-4 items-center justify-between max-w-6xl mx-auto px-4 py-3",
+          "attrs": {},
+          "children": [
+            {
+              "type": "element",
+              "key": "n_9g3vd809ke",
+              "node": "n_9g3vd809ke",
+              "tag": "a",
+              "class": "text-lg font-semibold focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+              "attrs": {
+                "data-page": "p_jkxxq7urfh",
+                "href": "#"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Deep Atelier"
+                }
+              ]
+            },
+            {
+              "type": "element",
+              "key": "n_mkwajhgruq",
+              "node": "n_mkwajhgruq",
+              "tag": "button",
+              "class": "p-2 rounded-md md:hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+              "attrs": {
+                "aria-label": "Menu",
+                "type": "button"
+              },
+              "toggles": "n_c1tjqajj4t",
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_ykfur34bvj",
+                  "node": "n_ykfur34bvj",
+                  "tag": "svg",
+                  "class": "w-6 h-6",
+                  "attrs": {
+                    "aria-hidden": "true"
+                  },
+                  "icon": "menu",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "element",
+              "key": "n_c1tjqajj4t",
+              "node": "n_c1tjqajj4t",
+              "tag": "nav",
+              "class": "hidden flex-col gap-4 w-full md:flex md:flex-row md:gap-6 md:w-auto data-[open=true]:flex",
+              "attrs": {},
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_58axf8t1c4",
+                  "node": "n_58axf8t1c4",
+                  "tag": "a",
+                  "class": "text-sm text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  "attrs": {
+                    "data-page": "p_jkxxq7urfh",
+                    "href": "#features"
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Fonctionnalités"
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_rn4979ysmb",
+                  "node": "n_rn4979ysmb",
+                  "tag": "a",
+                  "class": "text-sm text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  "attrs": {
+                    "data-page": "p_jkxxq7urfh",
+                    "href": "#pricing"
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Tarifs"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "element",
+      "key": "n_kreefwyb9a",
+      "node": "n_kreefwyb9a",
+      "tag": "main",
+      "class": "",
+      "attrs": {},
+      "children": [
+        {
+          "type": "element",
+          "key": "n_hzjlkojslr",
+          "node": "n_hzjlkojslr",
+          "tag": "section",
+          "class": "px-4 py-20 md:py-32",
+          "attrs": {},
+          "children": [
+            {
+              "type": "element",
+              "key": "n_kfv2pezkjl",
+              "node": "n_kfv2pezkjl",
+              "tag": "div",
+              "class": "flex flex-col gap-6 items-center max-w-4xl mx-auto text-center",
+              "attrs": {},
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_no3itf6vrd",
+                  "node": "n_no3itf6vrd",
+                  "tag": "h1",
+                  "class": "text-4xl font-bold tracking-tight text-balance md:text-6xl",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Dessinez votre site, "
+                    },
+                    {
+                      "type": "element",
+                      "tag": "span",
+                      "class": "text-primary",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "livrez du vrai code"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_bo3be0d2fs",
+                  "node": "n_bo3be0d2fs",
+                  "tag": "p",
+                  "class": "max-w-2xl text-lg text-muted-foreground text-pretty md:text-xl",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Deep Atelier transforme chaque geste sur le canvas et chaque prompt en code React, TypeScript et Tailwind que vous possédez, sans dépendance au builder."
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_ozgo0mf0v3",
+                  "node": "n_ozgo0mf0v3",
+                  "tag": "div",
+                  "class": "flex flex-col gap-3 justify-center w-full sm:flex-row sm:w-auto",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "element",
+                      "key": "n_ltt72h5gga",
+                      "node": "n_ltt72h5gga",
+                      "tag": "a",
+                      "class": "px-6 py-3 font-medium text-center text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                      "attrs": {
+                        "data-page": "p_jkxxq7urfh",
+                        "href": "#pricing"
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "Commencer gratuitement"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "element",
+                      "key": "n_gwf7xnee0y",
+                      "node": "n_gwf7xnee0y",
+                      "tag": "a",
+                      "class": "px-6 py-3 font-medium text-center border border-border rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                      "attrs": {
+                        "data-page": "p_jkxxq7urfh",
+                        "href": "#features"
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "Voir les fonctionnalités"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_sjr5fx4u7j",
+                  "node": "n_sjr5fx4u7j",
+                  "tag": "img",
+                  "class": "w-full mt-6 border border-border rounded-xl",
+                  "attrs": {
+                    "alt": "Aperçu de l'éditeur Deep Atelier",
+                    "height": "720",
+                    "src": "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%221280%22%20height=%22720%22%20viewBox=%220%200%201280%20720%22%20role=%22img%22%20aria-label=%22Aper%C3%A7u%20de%20l%27%C3%A9diteur%22%3E%0A%20%20%3Crect%20width=%221280%22%20height=%22720%22%20fill=%22%23e5e5e5%22%20/%3E%0A%20%20%3Ctext%20x=%2250%25%22%20y=%2250%25%22%20dominant-baseline=%22middle%22%20text-anchor=%22middle%22%20font-family=%22system-ui,%20sans-serif%22%20font-size=%2260%22%20fill=%22%23737373%22%3EAper%C3%A7u%20de%20l%27%C3%A9diteur%3C/text%3E%0A%3C/svg%3E",
+                    "width": "1280"
+                  },
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "element",
+          "key": "n_yoewrn3g55",
+          "node": "n_yoewrn3g55",
+          "tag": "section",
+          "class": "px-4 py-16 bg-muted md:py-24",
+          "attrs": {
+            "id": "features"
+          },
+          "children": [
+            {
+              "type": "element",
+              "key": "n_im33oiy2m3",
+              "node": "n_im33oiy2m3",
+              "tag": "div",
+              "class": "flex flex-col gap-10 max-w-6xl mx-auto",
+              "attrs": {},
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_mw2q9p58h7",
+                  "node": "n_mw2q9p58h7",
+                  "tag": "h2",
+                  "class": "text-3xl font-bold tracking-tight text-center text-balance md:text-4xl",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Tout pour livrer vite"
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_kovu8n7zkd",
+                  "node": "n_kovu8n7zkd",
+                  "tag": "ul",
+                  "class": "grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "element",
+                      "key": "n_7nx9uw1x50/n_9a7m7xx951",
+                      "node": "n_9a7m7xx951",
+                      "instance": "n_7nx9uw1x50",
+                      "tag": "li",
+                      "class": "p-6 bg-card border border-border rounded-xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_7nx9uw1x50/n_nl2e26sho9",
+                          "node": "n_nl2e26sho9",
+                          "instance": "n_7nx9uw1x50",
+                          "tag": "svg",
+                          "class": "w-6 h-6 text-primary",
+                          "attrs": {
+                            "aria-hidden": "true"
+                          },
+                          "icon": "zap",
+                          "children": []
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_7nx9uw1x50/n_ourq8chzcn",
+                          "node": "n_ourq8chzcn",
+                          "instance": "n_7nx9uw1x50",
+                          "tag": "h3",
+                          "class": "mt-4 text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Canvas d'abord"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_7nx9uw1x50/n_1t70ep2pyy",
+                          "node": "n_1t70ep2pyy",
+                          "instance": "n_7nx9uw1x50",
+                          "tag": "p",
+                          "class": "mt-2 text-muted-foreground",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Construisez à la souris sur un vrai rendu, en mobile d'abord."
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "element",
+                      "key": "n_pmgbtmlcre/n_9a7m7xx951",
+                      "node": "n_9a7m7xx951",
+                      "instance": "n_pmgbtmlcre",
+                      "tag": "li",
+                      "class": "p-6 bg-card border border-border rounded-xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_pmgbtmlcre/n_nl2e26sho9",
+                          "node": "n_nl2e26sho9",
+                          "instance": "n_pmgbtmlcre",
+                          "tag": "svg",
+                          "class": "w-6 h-6 text-primary",
+                          "attrs": {
+                            "aria-hidden": "true"
+                          },
+                          "icon": "zap",
+                          "children": []
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_pmgbtmlcre/n_ourq8chzcn",
+                          "node": "n_ourq8chzcn",
+                          "instance": "n_pmgbtmlcre",
+                          "tag": "h3",
+                          "class": "mt-4 text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Prompt intégré"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_pmgbtmlcre/n_1t70ep2pyy",
+                          "node": "n_1t70ep2pyy",
+                          "instance": "n_pmgbtmlcre",
+                          "tag": "p",
+                          "class": "mt-2 text-muted-foreground",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Décrivez une section : l'IA écrit des commandes que vous pouvez éditer."
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "element",
+                      "key": "n_nhiyzio742/n_9a7m7xx951",
+                      "node": "n_9a7m7xx951",
+                      "instance": "n_nhiyzio742",
+                      "tag": "li",
+                      "class": "p-6 bg-card border border-border rounded-xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_nhiyzio742/n_nl2e26sho9",
+                          "node": "n_nl2e26sho9",
+                          "instance": "n_nhiyzio742",
+                          "tag": "svg",
+                          "class": "w-6 h-6 text-primary",
+                          "attrs": {
+                            "aria-hidden": "true"
+                          },
+                          "icon": "zap",
+                          "children": []
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_nhiyzio742/n_ourq8chzcn",
+                          "node": "n_ourq8chzcn",
+                          "instance": "n_nhiyzio742",
+                          "tag": "h3",
+                          "class": "mt-4 text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Code à vous"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_nhiyzio742/n_1t70ep2pyy",
+                          "node": "n_1t70ep2pyy",
+                          "instance": "n_nhiyzio742",
+                          "tag": "p",
+                          "class": "mt-2 text-muted-foreground",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Next.js, TypeScript strict et Tailwind, exportés sans aucune dépendance."
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "element",
+          "key": "n_al7drt9jks",
+          "node": "n_al7drt9jks",
+          "tag": "section",
+          "class": "px-4 py-16 md:py-24",
+          "attrs": {
+            "id": "pricing"
+          },
+          "children": [
+            {
+              "type": "element",
+              "key": "n_imuw0ierf3",
+              "node": "n_imuw0ierf3",
+              "tag": "div",
+              "class": "flex flex-col gap-10 max-w-5xl mx-auto",
+              "attrs": {},
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_4lyyywo3tb",
+                  "node": "n_4lyyywo3tb",
+                  "tag": "h2",
+                  "class": "text-3xl font-bold tracking-tight text-center text-balance md:text-4xl",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Des tarifs simples"
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_m2uc2pciwu",
+                  "node": "n_m2uc2pciwu",
+                  "tag": "ul",
+                  "class": "grid grid-cols-1 gap-6 md:grid-cols-3",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "element",
+                      "key": "n_eixm74af8p/n_uhhsymf5sy",
+                      "node": "n_uhhsymf5sy",
+                      "instance": "n_eixm74af8p",
+                      "tag": "li",
+                      "class": "flex flex-col gap-4 p-8 bg-card border border-border rounded-2xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_eixm74af8p/n_iy4k7nugam",
+                          "node": "n_iy4k7nugam",
+                          "instance": "n_eixm74af8p",
+                          "tag": "h3",
+                          "class": "text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Découverte"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_eixm74af8p/n_2n9aon25ts",
+                          "node": "n_2n9aon25ts",
+                          "instance": "n_eixm74af8p",
+                          "tag": "p",
+                          "class": "text-4xl font-bold tracking-tight",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "0 €"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_eixm74af8p/n_fk2wqfjxsx",
+                          "node": "n_fk2wqfjxsx",
+                          "instance": "n_eixm74af8p",
+                          "tag": "p",
+                          "class": "text-muted-foreground",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Un projet, export ZIP."
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_eixm74af8p/n_o8kejfbo4j",
+                          "node": "n_o8kejfbo4j",
+                          "instance": "n_eixm74af8p",
+                          "tag": "a",
+                          "class": "px-6 py-3 font-medium text-center text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                          "attrs": {
+                            "data-page": "p_jkxxq7urfh",
+                            "href": "#contact"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Essayer"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "element",
+                      "key": "n_1zxgjd9ytm/n_uhhsymf5sy",
+                      "node": "n_uhhsymf5sy",
+                      "instance": "n_1zxgjd9ytm",
+                      "tag": "li",
+                      "class": "flex flex-col gap-4 p-8 text-primary-foreground bg-primary border border-primary rounded-2xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_1zxgjd9ytm/n_iy4k7nugam",
+                          "node": "n_iy4k7nugam",
+                          "instance": "n_1zxgjd9ytm",
+                          "tag": "h3",
+                          "class": "text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Pro"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_1zxgjd9ytm/n_2n9aon25ts",
+                          "node": "n_2n9aon25ts",
+                          "instance": "n_1zxgjd9ytm",
+                          "tag": "p",
+                          "class": "text-4xl font-bold tracking-tight",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "19 €"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_1zxgjd9ytm/n_fk2wqfjxsx",
+                          "node": "n_fk2wqfjxsx",
+                          "instance": "n_1zxgjd9ytm",
+                          "tag": "p",
+                          "class": "text-primary-foreground/80",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Projets illimités, push GitHub."
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_1zxgjd9ytm/n_o8kejfbo4j",
+                          "node": "n_o8kejfbo4j",
+                          "instance": "n_1zxgjd9ytm",
+                          "tag": "a",
+                          "class": "px-6 py-3 font-medium text-center text-foreground bg-background rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                          "attrs": {
+                            "data-page": "p_jkxxq7urfh",
+                            "href": "#contact"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Passer Pro"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "element",
+                      "key": "n_tar18dxsk1/n_uhhsymf5sy",
+                      "node": "n_uhhsymf5sy",
+                      "instance": "n_tar18dxsk1",
+                      "tag": "li",
+                      "class": "flex flex-col gap-4 p-8 bg-card border border-border rounded-2xl",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "type": "element",
+                          "key": "n_tar18dxsk1/n_iy4k7nugam",
+                          "node": "n_iy4k7nugam",
+                          "instance": "n_tar18dxsk1",
+                          "tag": "h3",
+                          "class": "text-lg font-semibold",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Équipe"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_tar18dxsk1/n_2n9aon25ts",
+                          "node": "n_2n9aon25ts",
+                          "instance": "n_tar18dxsk1",
+                          "tag": "p",
+                          "class": "text-4xl font-bold tracking-tight",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "49 €"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_tar18dxsk1/n_fk2wqfjxsx",
+                          "node": "n_fk2wqfjxsx",
+                          "instance": "n_tar18dxsk1",
+                          "tag": "p",
+                          "class": "text-muted-foreground",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Collaboration et bibliothèque partagée."
+                            }
+                          ]
+                        },
+                        {
+                          "type": "element",
+                          "key": "n_tar18dxsk1/n_o8kejfbo4j",
+                          "node": "n_o8kejfbo4j",
+                          "instance": "n_tar18dxsk1",
+                          "tag": "a",
+                          "class": "px-6 py-3 font-medium text-center text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                          "attrs": {
+                            "data-page": "p_jkxxq7urfh",
+                            "href": "#contact"
+                          },
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "Nous contacter"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "element",
+          "key": "n_toascq9sec",
+          "node": "n_toascq9sec",
+          "tag": "section",
+          "class": "px-4 py-16 bg-muted md:py-24",
+          "attrs": {
+            "id": "contact"
+          },
+          "children": [
+            {
+              "type": "element",
+              "key": "n_tij467hf28/n_nmvg53dj4b",
+              "node": "n_nmvg53dj4b",
+              "instance": "n_tij467hf28",
+              "tag": "form",
+              "class": "flex flex-col gap-4 max-w-md mx-auto",
+              "attrs": {
+                "method": "post"
+              },
+              "children": [
+                {
+                  "type": "element",
+                  "key": "n_tij467hf28/n_fqe7jp2sov",
+                  "node": "n_fqe7jp2sov",
+                  "instance": "n_tij467hf28",
+                  "tag": "h2",
+                  "class": "text-2xl font-bold",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Restez informé"
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_tij467hf28/n_wuuw2bq56i",
+                  "node": "n_wuuw2bq56i",
+                  "instance": "n_tij467hf28",
+                  "tag": "label",
+                  "class": "text-sm font-medium",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Adresse e-mail"
+                    }
+                  ]
+                },
+                {
+                  "type": "element",
+                  "key": "n_tij467hf28/n_e56mre5xs7",
+                  "node": "n_e56mre5xs7",
+                  "instance": "n_tij467hf28",
+                  "tag": "input",
+                  "class": "px-3 py-2 bg-background border border-border rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  "attrs": {
+                    "name": "email",
+                    "placeholder": "vous@exemple.fr",
+                    "required": "",
+                    "type": "email"
+                  },
+                  "children": []
+                },
+                {
+                  "type": "element",
+                  "key": "n_tij467hf28/n_8y6u2jzvid",
+                  "node": "n_8y6u2jzvid",
+                  "instance": "n_tij467hf28",
+                  "tag": "button",
+                  "class": "px-4 py-2 font-medium text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  "attrs": {
+                    "type": "submit"
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "S'inscrire"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "element",
+      "key": "n_3oagmjg4rm",
+      "node": "n_3oagmjg4rm",
+      "tag": "footer",
+      "class": "border-t border-border",
+      "attrs": {},
+      "children": [
+        {
+          "type": "element",
+          "key": "n_3e8whwf4x5",
+          "node": "n_3e8whwf4x5",
+          "tag": "div",
+          "class": "flex flex-col gap-4 justify-between max-w-6xl mx-auto px-4 py-8 text-sm text-muted-foreground md:flex-row",
+          "attrs": {},
+          "children": [
+            {
+              "type": "element",
+              "key": "n_ous1ebzsd6",
+              "node": "n_ous1ebzsd6",
+              "tag": "p",
+              "class": "",
+              "attrs": {},
+              "children": [
+                {
+                  "type": "text",
+                  "text": "© 2026 Deep Atelier. Code ouvert, sans dépendance."
+                }
+              ]
+            },
+            {
+              "type": "element",
+              "key": "n_ciopuz70xi",
+              "node": "n_ciopuz70xi",
+              "tag": "a",
+              "class": "underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+              "attrs": {
+                "href": "mailto:contact@example.com"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "contact@example.com"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "truncated": false
+}

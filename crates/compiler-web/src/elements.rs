@@ -512,93 +512,14 @@ impl<'a> Emitter<'a> {
 
     /// Segments de texte : mots, mises en forme (`strong`, `em`, `code`, couleur), sauts de ligne.
     fn runs(&self, runs: &[TextRun]) -> Vec<Jsx> {
-        enum Seg {
-            Text(String),
-            Elem(Jsx),
-            Br,
-        }
-        let mut segs: Vec<Seg> = Vec::new();
-        for run in runs {
-            let plain = !run.strong && !run.em && !run.code && run.color.is_none();
-            for (i, line) in run.text.split('\n').enumerate() {
-                if i > 0 {
-                    segs.push(Seg::Br);
-                }
-                let mut collapsed = String::new();
-                let mut space = false;
-                for c in line.chars() {
-                    if c.is_whitespace() {
-                        space = true;
-                    } else {
-                        if space {
-                            collapsed.push(' ');
-                        }
-                        space = false;
-                        collapsed.push(c);
-                    }
-                }
-                if space {
-                    collapsed.push(' ');
-                }
-                let lead = line.starts_with(char::is_whitespace);
-                if lead && !collapsed.starts_with(' ') {
-                    collapsed.insert(0, ' ');
-                }
-                if collapsed.trim().is_empty() {
-                    if !collapsed.is_empty() {
-                        segs.push(Seg::Text(" ".to_owned()));
-                    }
-                    continue;
-                }
-                if plain {
-                    segs.push(Seg::Text(collapsed));
-                    continue;
-                }
-                if collapsed.starts_with(' ') {
-                    segs.push(Seg::Text(" ".to_owned()));
-                }
-                segs.push(Seg::Elem(formatted(run, collapsed.trim())));
-                if collapsed.ends_with(' ') {
-                    segs.push(Seg::Text(" ".to_owned()));
-                }
-            }
-        }
-        // Textes voisins fusionnés, espaces doublés réduits, bords et sauts de ligne nettoyés.
-        let mut merged: Vec<Seg> = Vec::new();
-        for seg in segs {
-            match (merged.last_mut(), seg) {
-                (Some(Seg::Text(previous)), Seg::Text(next)) => {
-                    previous.push_str(&next);
-                    while previous.contains("  ") {
-                        *previous = previous.replace("  ", " ");
-                    }
-                }
-                (_, seg) => merged.push(seg),
-            }
-        }
-        let count = merged.len();
-        let mut out = Vec::new();
-        for i in 0..count {
-            let before_br = i + 1 < count && matches!(merged[i + 1], Seg::Br);
-            let after_br = i > 0 && matches!(merged[i - 1], Seg::Br);
-            match &merged[i] {
-                Seg::Text(value) => {
-                    let mut value = value.as_str();
-                    if i == 0 || after_br {
-                        value = value.trim_start();
-                    }
-                    if i + 1 == count || before_br {
-                        value = value.trim_end();
-                    }
-                    if !value.is_empty() {
-                        out.push(Jsx::Text(escape_text(value)));
-                    }
-                }
-                Seg::Elem(jsx) => out.push(jsx.clone()),
-                Seg::Br => out.push(Jsx::Element(Element::new("br"))),
-            }
-        }
-        out
+        text_segments(runs)
+            .into_iter()
+            .map(|segment| match segment {
+                TextSegment::Text(value) => Jsx::Text(escape_text(&value)),
+                TextSegment::Formatted(run, value) => formatted(run, &value),
+                TextSegment::Break => Jsx::Element(Element::new("br")),
+            })
+            .collect()
     }
 
     /// Instance d'un composant : props, variantes, slots nommés, contenu du slot par défaut.
@@ -826,6 +747,106 @@ impl<'a> Emitter<'a> {
     }
 }
 
+/// Segment d'un texte mis en forme, espaces normalisés comme dans le JSX exporté.
+pub(crate) enum TextSegment<'a> {
+    Text(String),
+    /// Mots mis en forme par leur segment d'origine (`strong`, `em`, `code`, couleur).
+    Formatted(&'a TextRun, String),
+    Break,
+}
+
+/// Segments d'un texte : espaces réduits, textes voisins fusionnés, bords et sauts de ligne
+/// nettoyés (partagé par l'export et le canvas).
+pub(crate) fn text_segments(runs: &[TextRun]) -> Vec<TextSegment<'_>> {
+    enum Seg<'a> {
+        Text(String),
+        Formatted(&'a TextRun, String),
+        Br,
+    }
+    let mut segs: Vec<Seg<'_>> = Vec::new();
+    for run in runs {
+        let plain = !run.strong && !run.em && !run.code && run.color.is_none();
+        for (i, line) in run.text.split('\n').enumerate() {
+            if i > 0 {
+                segs.push(Seg::Br);
+            }
+            let mut collapsed = String::new();
+            let mut space = false;
+            for c in line.chars() {
+                if c.is_whitespace() {
+                    space = true;
+                } else {
+                    if space {
+                        collapsed.push(' ');
+                    }
+                    space = false;
+                    collapsed.push(c);
+                }
+            }
+            if space {
+                collapsed.push(' ');
+            }
+            let lead = line.starts_with(char::is_whitespace);
+            if lead && !collapsed.starts_with(' ') {
+                collapsed.insert(0, ' ');
+            }
+            if collapsed.trim().is_empty() {
+                if !collapsed.is_empty() {
+                    segs.push(Seg::Text(" ".to_owned()));
+                }
+                continue;
+            }
+            if plain {
+                segs.push(Seg::Text(collapsed));
+                continue;
+            }
+            if collapsed.starts_with(' ') {
+                segs.push(Seg::Text(" ".to_owned()));
+            }
+            segs.push(Seg::Formatted(run, collapsed.trim().to_owned()));
+            if collapsed.ends_with(' ') {
+                segs.push(Seg::Text(" ".to_owned()));
+            }
+        }
+    }
+    // Textes voisins fusionnés, espaces doublés réduits, bords et sauts de ligne nettoyés.
+    let mut merged: Vec<Seg<'_>> = Vec::new();
+    for seg in segs {
+        match (merged.last_mut(), seg) {
+            (Some(Seg::Text(previous)), Seg::Text(next)) => {
+                previous.push_str(&next);
+                while previous.contains("  ") {
+                    *previous = previous.replace("  ", " ");
+                }
+            }
+            (_, seg) => merged.push(seg),
+        }
+    }
+    let count = merged.len();
+    let mut out = Vec::new();
+    for i in 0..count {
+        let before_br = i + 1 < count && matches!(merged[i + 1], Seg::Br);
+        let after_br = i > 0 && matches!(merged[i - 1], Seg::Br);
+        match &merged[i] {
+            Seg::Text(value) => {
+                let mut value = value.as_str();
+                if i == 0 || after_br {
+                    value = value.trim_start();
+                }
+                if i + 1 == count || before_br {
+                    value = value.trim_end();
+                }
+                if !value.is_empty() {
+                    out.push(TextSegment::Text(value.to_owned()));
+                }
+            }
+            Seg::Formatted(run, value) => out.push(TextSegment::Formatted(run, value.clone())),
+            Seg::Br => out.push(TextSegment::Break),
+        }
+    }
+    out
+}
+
 /// Élément d'un segment mis en forme : `strong`, `em`, `code` imbriqués, couleur sur le plus
 /// externe (`span` sans autre mise en forme).
 fn formatted(run: &TextRun, value: &str) -> Jsx {
@@ -859,7 +880,7 @@ fn formatted(run: &TextRun, value: &str) -> Jsx {
 }
 
 /// Classes d'une cible de bascule ouverte : visible là où elle est masquée fermée.
-fn open_classes(node: &Node, display: Display) -> Vec<String> {
+pub(crate) fn open_classes(node: &Node, display: Display) -> Vec<String> {
     let Some(visibility) = &node.visibility else {
         return Vec::new();
     };

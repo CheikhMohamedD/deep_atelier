@@ -1,0 +1,16 @@
+{
+  "name": "@deep-atelier/ir-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Types TypeScript générés depuis Rust (IR, canvas, contrat de l'API) par `cargo xtask codegen` : ne pas modifier.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

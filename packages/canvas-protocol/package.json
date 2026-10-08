@@ -1,0 +1,22 @@
+{
+  "name": "@deep-atelier/canvas-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Messages entre l'éditeur et l'iframe du canvas, avec leurs gardes.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deep-atelier/ir-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

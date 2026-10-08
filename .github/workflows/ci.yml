@@ -19,6 +19,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
+      # Types TypeScript générés (packages/ir-types) à jour avec les types Rust.
+      - run: cargo xtask codegen --check
       - run: cargo test --all
       - run: cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
 
@@ -42,6 +44,97 @@ jobs:
           set -a; eval "$(supabase status -o env)"; set +a
           cargo test -p deep-atelier-api -- --include-ignored
 
+  web:
+    name: Web (Prettier, moteur wasm, types, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Le moteur de l'éditeur (packages/engine) se compile depuis crates/engine-wasm.
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+  e2e:
+    name: Éditeur de bout en bout (Playwright 390, 768, 1280)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.109.1
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Stack Supabase local (base, auth, API REST, Mailpit pour les liens magiques)
+        run: |
+          echo '[]' > supabase/signing_keys.json
+          supabase gen signing-key --algorithm ES256 --yes
+          supabase start -x studio,meta,imgproxy,analytics,vector,edge-runtime,realtime,storage
+          supabase status -o env | sed -e 's/^/STACK_/' >> "$GITHUB_ENV"
+      - name: Construire l'API et l'éditeur
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:3001
+        run: |
+          export NEXT_PUBLIC_SUPABASE_URL="$(echo "$STACK_API_URL" | tr -d '"')"
+          export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$(echo "$STACK_PUBLISHABLE_KEY" | tr -d '"')"
+          cargo build -p deep-atelier-api
+          pnpm build
+      - name: Navigateur Playwright
+        working-directory: apps/editor
+        run: pnpm exec playwright install --with-deps chromium
+      # Serveurs et tests dans la même étape : les processus d'arrière-plan vivent jusqu'aux tests.
+      - name: API, éditeur et tests Playwright
+        run: |
+          DATABASE_URL="$(echo "$STACK_DB_URL" | tr -d '"')" \
+            SUPABASE_URL="$(echo "$STACK_API_URL" | tr -d '"')" \
+            CORS_ORIGINS=http://localhost:3000 \
+            nohup ./target/debug/deep-atelier-api > "$RUNNER_TEMP/api.log" 2>&1 &
+          (cd apps/editor && nohup pnpm start > "$RUNNER_TEMP/editor.log" 2>&1 &)
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3001/health > /dev/null && curl -sf -o /dev/null http://localhost:3000/login; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != 1 ]; then
+            cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/editor.log"
+            exit 1
+          fi
+          cd apps/editor
+          MAILPIT_URL="$(echo "$STACK_MAILPIT_URL" | tr -d '"')" E2E_BASE_URL=http://localhost:3000 pnpm e2e
+      - name: Conserver le rapport Playwright et les journaux
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            apps/editor/playwright-report
+            apps/editor/test-results
+            ${{ runner.temp }}/*.log
+          if-no-files-found: ignore
+
   export:
     name: Export Next.js (Prettier, build, ESLint, viewports, Lighthouse)
     runs-on: ubuntu-latest
@@ -49,9 +142,8 @@ jobs:
       - uses: actions/checkout@v7
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
+      # Version de pnpm lue dans `packageManager` (package.json).
       - uses: pnpm/action-setup@v6
-        with:
-          version: 12.10.1
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -70,8 +162,7 @@ jobs:
             pnpm build
             pnpm lint
           done
-      - name: Installer l'outil de contrôle
-        working-directory: tools/export-check
+      - name: Installer le workspace (dont tools/export-check)
         run: pnpm install --frozen-lockfile
       - name: Viewports, menu et Lighthouse mobile
         env:

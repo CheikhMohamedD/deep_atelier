@@ -7,43 +7,49 @@ use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{PgConnection, PgPool};
 use time::OffsetDateTime;
+use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::document::Checked;
 use crate::error::ApiError;
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
 pub struct Project {
     pub id: Uuid,
     pub name: String,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
     /// Version du document courant.
     pub document_version: i64,
 }
 
 /// Document courant d'un projet.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
 pub struct DocumentState {
     pub version: i64,
     pub ir_version: i32,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
+    #[ts(as = "ir::Document")]
     pub document: Json<Value>,
 }
 
 /// Résultat d'une sauvegarde.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
 pub struct Saved {
     pub version: i64,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub updated_at: OffsetDateTime,
 }
 
 /// Version d'un projet, sans son document.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
 pub struct Version {
     pub number: i32,
     pub name: Option<String>,
@@ -53,16 +59,18 @@ pub struct Version {
     pub document_version: i64,
     pub ir_version: i32,
     #[serde(with = "time::serde::rfc3339")]
+    #[ts(type = "string")]
     pub created_at: OffsetDateTime,
     pub created_by: Option<Uuid>,
 }
 
 /// Version et son document.
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, sqlx::FromRow, TS)]
 pub struct VersionWithDocument {
     #[sqlx(flatten)]
     #[serde(flatten)]
     pub version: Version,
+    #[ts(as = "ir::Document")]
     pub document: Json<Value>,
 }
 
