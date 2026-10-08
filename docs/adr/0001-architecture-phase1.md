@@ -765,6 +765,12 @@ consignée ici (question → décision, avec la date).
 **Avant (b2)**
 
 6. Projet Supabase hébergé : organisation, région, offre.
+   - **Décision (2026-10-08) : nouveau projet, offre Free, région `eu-west-3` (Paris)**, dans
+     l'organisation du propriétaire. Limites acceptées pour développer le MVP : 500 Mo de base,
+     1 Go de fichiers, pas de sauvegardes, pause après une semaine sans activité. Passage en Pro
+     sans migration quand de vrais utilisateurs arrivent. Ni l'organisation ni l'id du projet
+     n'apparaissent dans le dépôt.
+10. Méthodes de connexion à l'éditeur (question ajoutée à l'étape b2 : la spec ne les précise pas).
 
 **Avant (c)**
 
