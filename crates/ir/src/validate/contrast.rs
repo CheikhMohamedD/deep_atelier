@@ -2,21 +2,23 @@
 //!
 //! Un texte rendu par une page est jugé à chacun de ses rendus : fond, couleur et taille du texte
 //! viennent de ses ancêtres rendus (l'arbre du composant qui accueille un contenu de slot, la page
-//! qui accueille une instance ; une instance porte le style de la racine de son composant). Un
-//! texte jamais rendu est jugé dans l'arbre où il est écrit, sur le fond de la page.
+//! qui accueille une instance ; une instance porte le style de la racine de son composant), avec
+//! les surcharges des variantes choisies par chaque instance. Un texte jamais rendu est jugé dans
+//! l'arbre où il est écrit, sur le fond de la page.
 //!
 //! Limites : les images de fond et l'opacité des ancêtres sont ignorées, et les états
 //! d'interaction ne sont pas vérifiés.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use crate::document::{BindableField, Document, Page};
 use crate::id::{NodeId, TokenName};
 use crate::node::{Node, NodeKind, PropValue};
-use crate::render::default_bound;
+use crate::render::{default_bound, variant_style};
 use crate::style::color::{ColorRef, ColorSource, Rgba, contrast_ratio};
 use crate::style::responsive::Breakpoint;
-use crate::style::style::Background;
+use crate::style::style::{Background, Style};
 use crate::style::values::{FontSize, FontWeight};
 use crate::tokens::ColorMode;
 use crate::validate::{Context, Issue, IssueCode as C};
@@ -41,11 +43,17 @@ pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
             let bound = |field: BindableField| render.bound(doc, index, field).map(|b| b.value);
             let Some(runs) = text_runs(node, &bound) else { continue };
             // Les slots ne produisent pas d'élément ; une instance porte le style de la racine
-            // de son composant, qui la précède dans la chaîne.
-            let chain: Vec<&Node> = render
+            // de son composant, qui la précède dans la chaîne. Le style d'un nœud de composant
+            // reçoit les surcharges des variantes choisies par son instance.
+            let chain: Vec<Layer<'_>> = render
                 .chain(index)
-                .filter_map(|i| doc.node(&render.nodes[i].id))
-                .filter(|n| !matches!(n.kind, NodeKind::Slot(_)))
+                .filter_map(|i| {
+                    let entry = &render.nodes[i];
+                    let node = doc.node(&entry.id)?;
+                    let style = variant_style(doc, &entry.frames, node).map_or(Cow::Borrowed(&node.style), Cow::Owned);
+                    Some(Layer { node, style })
+                })
+                .filter(|l| !matches!(l.node.kind, NodeKind::Slot(_)))
                 .collect();
             evaluate(doc, node, &chain, &runs, &modes, Some(page), &mut reported, issues);
         }
@@ -56,11 +64,21 @@ pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
         }
         let bound = |field: BindableField| default_bound(doc, &node.id, field);
         let Some(runs) = text_runs(node, &bound) else { continue };
-        let chain: Vec<&Node> = std::iter::once(node)
+        let chain: Vec<Layer<'_>> = std::iter::once(node)
             .chain(doc.ancestors(&node.id).iter().filter_map(|a| doc.node(a)))
+            .map(|node| Layer {
+                node,
+                style: Cow::Borrowed(&node.style),
+            })
             .collect();
         evaluate(doc, node, &chain, &runs, &modes, None, &mut reported, issues);
     }
+}
+
+/// Élément de la chaîne d'un texte : nœud et style effectif (variantes appliquées).
+struct Layer<'a> {
+    node: &'a Node,
+    style: Cow<'a, Style>,
 }
 
 /// Couleurs propres des segments de texte visibles d'un nœud (`None` : couleur héritée) ;
@@ -103,7 +121,7 @@ fn text_runs<'d>(
 fn evaluate(
     doc: &Document,
     node: &Node,
-    chain: &[&Node],
+    chain: &[Layer<'_>],
     runs: &[Option<&ColorRef>],
     modes: &[ColorMode],
     page: Option<&Page>,
@@ -119,7 +137,7 @@ fn evaluate(
         for bp in Breakpoint::ALL {
             let visible = chain
                 .iter()
-                .all(|n| n.visibility.as_ref().is_none_or(|v| *v.resolve(bp)));
+                .all(|l| l.node.visibility.as_ref().is_none_or(|v| *v.resolve(bp)));
             if !visible {
                 continue;
             }
@@ -201,18 +219,18 @@ fn page_background(doc: &Document, mode: ColorMode) -> Rgba {
 }
 
 /// Couleur de texte effective (cascade des ancêtres, `current` = hérité).
-fn text_color(chain: &[&Node], bp: Breakpoint) -> Option<ColorRef> {
-    chain.iter().find_map(|n| {
-        let color = n.style.text_color.as_ref()?.resolve(bp).clone();
+fn text_color(chain: &[Layer<'_>], bp: Breakpoint) -> Option<ColorRef> {
+    chain.iter().find_map(|l| {
+        let color = l.style.text_color.as_ref()?.resolve(bp).clone();
         (color.source != ColorSource::Current).then_some(color)
     })
 }
 
 /// Fonds possibles derrière le nœud (plusieurs si un dégradé est traversé), opaques.
-fn background_candidates(doc: &Document, chain: &[&Node], bp: Breakpoint, mode: ColorMode) -> Vec<Rgba> {
+fn background_candidates(doc: &Document, chain: &[Layer<'_>], bp: Breakpoint, mode: ColorMode) -> Vec<Rgba> {
     let mut layers: Vec<Vec<Rgba>> = Vec::new();
-    for n in chain {
-        let Some(background) = n.style.background.as_ref() else {
+    for l in chain {
+        let Some(background) = l.style.background.as_ref() else {
             continue;
         };
         let colors: Vec<Rgba> = match background.resolve(bp) {
@@ -242,15 +260,15 @@ fn background_candidates(doc: &Document, chain: &[&Node], bp: Breakpoint, mode: 
     candidates
 }
 
-fn is_large_text(chain: &[&Node], bp: Breakpoint) -> bool {
+fn is_large_text(chain: &[Layer<'_>], bp: Breakpoint) -> bool {
     let size = chain
         .iter()
-        .find_map(|n| n.style.font_size.as_ref().map(|v| *v.resolve(bp)))
+        .find_map(|l| l.style.font_size.as_ref().map(|v| *v.resolve(bp)))
         .unwrap_or(FontSize::Base)
         .to_px();
     let weight = chain
         .iter()
-        .find_map(|n| n.style.font_weight.as_ref().map(|v| *v.resolve(bp)))
+        .find_map(|l| l.style.font_weight.as_ref().map(|v| *v.resolve(bp)))
         .unwrap_or(FontWeight::Normal);
     size >= 24.0 || (size >= 18.66 && weight.numeric() >= 700)
 }
