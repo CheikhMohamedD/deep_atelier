@@ -37,3 +37,7 @@ supabase/.temp/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Éditeur : fichiers copiés depuis les paquets (scripts/prepare-assets.mjs)
+apps/editor/public/canvas/
+apps/editor/public/engine/

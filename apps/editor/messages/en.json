@@ -1,0 +1,82 @@
+{
+  "common": {
+    "appName": "Deep Atelier",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "language": {
+    "label": "Language",
+    "fr": "Français",
+    "en": "English"
+  },
+  "auth": {
+    "title": "Sign in to Deep Atelier",
+    "subtitle": "Design your site, ship real code.",
+    "github": "Continue with GitHub",
+    "or": "or",
+    "email": "Email address",
+    "emailPlaceholder": "you@example.com",
+    "magicLink": "Email me a sign-in link",
+    "sending": "Sending…",
+    "sent": "Link sent to {email}. Open it in this browser.",
+    "failed": "Sign-in failed: {message}",
+    "callbackFailed": "Sign-in failed. Request a new link.",
+    "signOut": "Sign out"
+  },
+  "projects": {
+    "title": "Your projects",
+    "empty": "No projects yet: create your first one.",
+    "new": "New project",
+    "name": "Project name",
+    "namePlaceholder": "My site",
+    "create": "Create",
+    "creating": "Creating…",
+    "open": "Open",
+    "updated": "Updated {date}",
+    "deleteConfirm": "Delete “{name}”? The project and its versions will be erased.",
+    "loadFailed": "Could not load your projects."
+  },
+  "editor": {
+    "loading": "Opening project…",
+    "projects": "Projects",
+    "page": "Page",
+    "undo": "Undo",
+    "redo": "Redo",
+    "design": "Design",
+    "preview": "Preview",
+    "widths": "Widths",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Zoom to 100%",
+    "zoomFit": "Zoom to fit",
+    "frameTitle": "Canvas, {width} px wide",
+    "overflow": "Horizontal overflow",
+    "selection": "{count, plural, =0 {Nothing selected} one {# element selected} other {# elements selected}}",
+    "commandFailed": "Action not possible ({code}).",
+    "save": {
+      "saved": "Saved",
+      "dirty": "Unsaved changes",
+      "saving": "Saving…",
+      "error": "Save failed, retrying soon",
+      "conflict": "Changed elsewhere"
+    },
+    "conflict": "This project was changed elsewhere. Reload to continue from the latest version.",
+    "reload": "Reload",
+    "loadFailed": "Could not open this project.",
+    "mode": "Mode",
+    "zoomLevel": "Zoom: {zoom}"
+  },
+  "errors": {
+    "UNAUTHORIZED": "Your session expired: sign in again.",
+    "NOT_FOUND": "Project not found.",
+    "VERSION_CONFLICT": "The document changed in the meantime.",
+    "INVALID_REQUEST": "Request rejected.",
+    "PAYLOAD_TOO_LARGE": "Document too large.",
+    "INVALID_DOCUMENT": "Document rejected: it is inconsistent.",
+    "UNAVAILABLE": "Service temporarily unavailable.",
+    "INTERNAL": "Server error.",
+    "NETWORK": "Server unreachable."
+  }
+}

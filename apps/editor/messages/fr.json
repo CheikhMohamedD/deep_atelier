@@ -1,0 +1,82 @@
+{
+  "common": {
+    "appName": "Deep Atelier",
+    "loading": "Chargement…",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "language": {
+    "label": "Langue",
+    "fr": "Français",
+    "en": "English"
+  },
+  "auth": {
+    "title": "Connexion à Deep Atelier",
+    "subtitle": "Dessinez votre site, livrez du vrai code.",
+    "github": "Continuer avec GitHub",
+    "or": "ou",
+    "email": "Adresse e-mail",
+    "emailPlaceholder": "vous@exemple.fr",
+    "magicLink": "Recevoir un lien de connexion",
+    "sending": "Envoi…",
+    "sent": "Lien envoyé à {email}. Ouvrez-le dans ce navigateur.",
+    "failed": "La connexion a échoué : {message}",
+    "callbackFailed": "La connexion a échoué. Demandez un nouveau lien.",
+    "signOut": "Se déconnecter"
+  },
+  "projects": {
+    "title": "Vos projets",
+    "empty": "Aucun projet pour l'instant : créez le premier.",
+    "new": "Nouveau projet",
+    "name": "Nom du projet",
+    "namePlaceholder": "Mon site",
+    "create": "Créer",
+    "creating": "Création…",
+    "open": "Ouvrir",
+    "updated": "Modifié le {date}",
+    "deleteConfirm": "Supprimer « {name} » ? Le projet et ses versions seront effacés.",
+    "loadFailed": "Impossible de charger vos projets."
+  },
+  "editor": {
+    "loading": "Ouverture du projet…",
+    "projects": "Projets",
+    "page": "Page",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "design": "Design",
+    "preview": "Aperçu",
+    "widths": "Largeurs",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "zoomReset": "Zoom 100 %",
+    "zoomFit": "Ajuster à l'écran",
+    "frameTitle": "Canvas, largeur {width} px",
+    "overflow": "Débordement horizontal",
+    "selection": "{count, plural, =0 {Aucune sélection} one {# élément sélectionné} other {# éléments sélectionnés}}",
+    "commandFailed": "Action impossible ({code}).",
+    "save": {
+      "saved": "Enregistré",
+      "dirty": "Modifications en attente",
+      "saving": "Enregistrement…",
+      "error": "Échec de l'enregistrement, nouvel essai bientôt",
+      "conflict": "Modifié ailleurs"
+    },
+    "conflict": "Ce projet a été modifié ailleurs. Rechargez pour reprendre la dernière version.",
+    "reload": "Recharger",
+    "loadFailed": "Impossible d'ouvrir ce projet.",
+    "mode": "Mode",
+    "zoomLevel": "Zoom : {zoom}"
+  },
+  "errors": {
+    "UNAUTHORIZED": "Votre session a expiré : reconnectez-vous.",
+    "NOT_FOUND": "Projet introuvable.",
+    "VERSION_CONFLICT": "Le document a changé entre-temps.",
+    "INVALID_REQUEST": "Requête refusée.",
+    "PAYLOAD_TOO_LARGE": "Document trop volumineux.",
+    "INVALID_DOCUMENT": "Document refusé : il est incohérent.",
+    "UNAVAILABLE": "Service momentanément indisponible.",
+    "INTERNAL": "Erreur du serveur.",
+    "NETWORK": "Serveur injoignable."
+  }
+}

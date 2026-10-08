@@ -8,6 +8,9 @@ allowBuilds:
   esbuild: true
   sharp: false
   unrs-resolver: false
+  # Binaires natifs fournis par des paquets précompilés (dépendances de next-intl).
+  "@parcel/watcher": false
+  "@swc/core": false
 
 minimumReleaseAgeExclude:
   - vite@8.3.4

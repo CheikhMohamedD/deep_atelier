@@ -9,7 +9,8 @@
         "pkg/**",
         ".next/**",
         "!.next/cache/**",
-        "public/canvas/**"
+        "public/canvas/**",
+        "public/engine/**"
       ]
     },
     "typecheck": {
