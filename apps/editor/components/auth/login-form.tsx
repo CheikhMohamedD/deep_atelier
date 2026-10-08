@@ -15,7 +15,8 @@ type State =
   | { kind: "sent"; email: string }
   | { kind: "error"; message: string };
 
-export function LoginForm({ next }: { next: string }) {
+/** `github` : la connexion GitHub est active dans Supabase (sinon le bouton est masqué). */
+export function LoginForm({ next, github }: { next: string; github: boolean }) {
   const t = useTranslations("auth");
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -48,15 +49,23 @@ export function LoginForm({ next }: { next: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Button variant="outline" onClick={signInWithGitHub} className="w-full">
-        <GitHubMark />
-        {t("github")}
-      </Button>
-      <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        {t("or")}
-        <span className="h-px flex-1 bg-border" />
-      </div>
+      {github ? (
+        <>
+          <Button
+            variant="outline"
+            onClick={signInWithGitHub}
+            className="w-full"
+          >
+            <GitHubMark />
+            {t("github")}
+          </Button>
+          <div className="flex items-center gap-3 text-xs uppercase text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            {t("or")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : null}
       <form onSubmit={sendMagicLink} className="flex flex-col gap-3">
         <Label htmlFor="email">{t("email")}</Label>
         <Input

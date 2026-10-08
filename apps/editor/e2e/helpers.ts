@@ -5,6 +5,26 @@ import { expect, type BrowserContext, type Page } from "@playwright/test";
 
 const MAILPIT_URL = process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
 const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:3001";
+const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? "http://127.0.0.1:54321";
+
+/** La connexion GitHub est-elle active sur le stack Supabase testé ? */
+export async function githubEnabled(): Promise<boolean> {
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/settings`);
+  const settings = (await response.json()) as {
+    external?: { github?: boolean };
+  };
+  return settings.external?.github === true;
+}
+
+/** Le bouton GitHub n'apparaît que si le fournisseur est actif (sinon Supabase répond 400). */
+export async function expectGitHubButton(
+  page: Page,
+  name: string,
+): Promise<void> {
+  const button = page.getByRole("button", { name });
+  if (await githubEnabled()) await expect(button).toBeVisible();
+  else await expect(button).toHaveCount(0);
+}
 
 /** Landing de démonstration (compiler_web::demo::landing), écrite par global-setup. */
 export const LANDING_FIXTURE =
