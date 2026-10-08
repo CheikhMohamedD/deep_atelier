@@ -8,8 +8,8 @@ versionné et exportable. Le code édité à la main se reflète sur le canvas.
 
 ## État
 
-Phase 1 (MVP web) : étapes (a) `crates/ir` et (b) `crates/compiler-web` livrées, prochaine étape
-(b2) `crates/api` + Supabase.
+Phase 1 (MVP web) : étapes (a) `crates/ir`, (b) `crates/compiler-web` et (b2) `crates/api` +
+Supabase livrées, prochaine étape (c) `crates/engine-wasm` + canvas.
 
 - Spécifications : [`docs/SPEC.md`](docs/SPEC.md)
 - Architecture de la Phase 1 : [`docs/adr/0001-architecture-phase1.md`](docs/adr/0001-architecture-phase1.md)
@@ -21,6 +21,19 @@ cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 cargo build -p deep-atelier-ir --target wasm32-unknown-unknown
+```
+
+API et Supabase en local (Docker et CLI Supabase) : la clé de signature des jetons se crée une
+fois, puis le stack démarre avec les migrations de `supabase/migrations`.
+
+```sh
+echo '[]' > supabase/signing_keys.json && supabase gen signing-key --algorithm ES256 --yes
+supabase start
+cp -n .env.example .env
+cargo run -p deep-atelier-api
+# Tests de l'API, intégration comprise
+set -a; eval "$(supabase status -o env)"; set +a
+cargo test -p deep-atelier-api -- --include-ignored
 ```
 
 Vérifier un projet exporté comme la CI (job `export`) : la landing de démonstration est écrite dans
@@ -50,7 +63,7 @@ CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 
 - [x] (a) `crates/ir` : schéma, commandes, historique, validation
 - [x] (b) `crates/compiler-web` : IR → TSX + Tailwind
-- [ ] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
+- [x] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
 - [ ] (c) `crates/engine-wasm` + canvas en iframe
 - [ ] (d) Calques + inspecteur par breakpoint
 - [ ] (e) Glisser-déposer depuis la bibliothèque
