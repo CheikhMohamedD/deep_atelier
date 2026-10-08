@@ -120,6 +120,12 @@ pub(crate) fn is_kebab_case(text: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Vrai si `text` est un identifiant camelCase ASCII (`title`, `imageAlt`, `children`) : nom de
+/// prop, d'axe de variantes ou de slot, qui devient une prop TypeScript du composant.
+pub(crate) fn is_camel_case(text: &str) -> bool {
+    text.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && text.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
 /// Longueur maximale d'un nom de token.
 pub(crate) const TOKEN_NAME_MAX_LEN: usize = 48;
 

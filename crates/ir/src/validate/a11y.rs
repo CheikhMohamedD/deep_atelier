@@ -5,9 +5,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::document::{BindableField, Component, Document, Owner, Page};
+use crate::document::{BindableField, Component, Document, Owner};
 use crate::id::NodeId;
 use crate::node::{ContainerRole, DEFAULT_SLOT, InstanceProps, Node, NodeKind, PAGE_SLOT, PropValue, TextRole};
+use crate::render::{RenderTree, default_bound};
 use crate::validate::{Context, Issue, IssueCode as C};
 
 pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
@@ -19,20 +20,31 @@ pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
             format!("site language `{}` is not a valid BCP 47 tag", doc.settings.lang),
         ));
     }
+    // Nœud jamais rendu (composant sans instance, layout sans page) : jugé dans l'arbre où il
+    // est écrit, avec les valeurs par défaut des props qui le lient.
     let hidden = hidden_nodes(ctx);
     for node in doc.nodes.values() {
-        if ctx.owner(&node.id).is_none() || hidden.contains(&node.id) {
+        if ctx.owner(&node.id).is_none() || ctx.is_rendered(&node.id) || hidden.contains(&node.id) {
             continue;
         }
-        node_rules(ctx, node, issues);
+        let bound = |field: BindableField| default_bound(doc, &node.id, field).map(|value| (value, None));
+        node_rules(ctx, node, &[], &bound, issues);
     }
-    for page in &doc.pages {
+    // Nœuds rendus : jugés à chaque rendu exposé, avec les valeurs de l'instance qui les rend.
+    for (page, render) in &ctx.renders {
+        let masked = masked(doc, render);
         let mut h1 = 0;
         let mut previous = 0u8;
         let mut mains = 0;
-        // Un titre ou un `Main` masqué n'existe pas pour les technologies d'assistance.
-        for id in &exposed_render(ctx, page, &hidden) {
-            let Some(node) = doc.node(id) else { continue };
+        for (index, entry) in render.nodes.iter().enumerate() {
+            // Un titre ou un `Main` masqué n'existe pas pour les technologies d'assistance.
+            if masked[index] {
+                continue;
+            }
+            let Some(node) = doc.node(&entry.id) else { continue };
+            let id = &entry.id;
+            let bound = |field: BindableField| render.bound(doc, index, field).map(|b| (b.value, b.overridden_by));
+            node_rules(ctx, node, &entry.frames, &bound, issues);
             if let NodeKind::Text(text) = &node.kind
                 && let TextRole::Heading { level } = text.role
             {
@@ -91,6 +103,18 @@ pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
     }
 }
 
+/// Masquage au rendu : `a11y.hidden` posé sur le nœud ou sur un ancêtre rendu (instance qui rend
+/// un composant, slot qui rend un contenu, slot `page` qui rend la page compris).
+fn masked(doc: &Document, render: &RenderTree) -> Vec<bool> {
+    let mut out = vec![false; render.nodes.len()];
+    // Préordre : un parent précède ses enfants.
+    for (index, entry) in render.nodes.iter().enumerate() {
+        let own = doc.node(&entry.id).is_some_and(|n| n.a11y.hidden);
+        out[index] = own || entry.parent.is_some_and(|p| out[p]);
+    }
+    out
+}
+
 fn valid_lang(lang: &str) -> bool {
     let mut parts = lang.split('-');
     let primary = parts.next().unwrap_or_default();
@@ -102,9 +126,8 @@ fn valid_lang(lang: &str) -> bool {
 /// Nœuds retirés de l'arbre d'accessibilité là où ils sont écrits : `a11y.hidden` posé sur eux ou
 /// sur un ancêtre rendu. Le contenu d'un slot est rendu à la place du slot ciblé dans l'arbre du
 /// composant, la racine d'une page à la place du slot `page` de son layout : ils héritent du
-/// masquage de ce slot. L'arbre d'un composant, validé une seule fois pour toutes ses instances,
-/// n'hérite pas du masquage d'une instance ; le rendu de chaque page en tient compte
-/// (`exposed_render`).
+/// masquage de ce slot. Ne sert qu'aux nœuds jamais rendus : un nœud rendu hérite du masquage de
+/// ses ancêtres rendus (`masked`).
 fn hidden_nodes(ctx: &Context<'_>) -> BTreeSet<NodeId> {
     let mut hiding = Hiding {
         ctx,
@@ -193,102 +216,28 @@ impl Hiding<'_> {
     }
 }
 
-/// Nœuds exposés d'une page, dans l'ordre de rendu. `Context::render_order` donne le rendu en
-/// préordre ; le parent rendu de chaque nœud y est retrouvé parmi les nœuds encore ouverts
-/// (enfant d'un élément, racine du composant d'une instance, contenu d'un slot, racine de la page
-/// dans le slot `page` du layout), pour qu'il hérite de son masquage : l'arbre du composant d'une
-/// instance masquée, ou placée sous un conteneur masqué, n'existe pas pour les technologies
-/// d'assistance.
-fn exposed_render(ctx: &Context<'_>, page: &Page, hidden: &BTreeSet<NodeId>) -> Vec<NodeId> {
-    let doc = ctx.doc;
-    let mut open: Vec<Open<'_>> = Vec::new();
-    let mut out = Vec::new();
-    for id in ctx.render_order(page) {
-        let Some(node) = doc.node(&id) else { continue };
-        let placed = loop {
-            let Some(parent) = open.last_mut() else {
-                break None;
-            };
-            if let Some((position, frames)) = parent.place(doc, page, node) {
-                parent.next = position + 1;
-                break Some((parent.hidden, frames));
-            }
-            open.pop();
-        };
-        // Sans parent rendu (racine du rendu) : masquage de l'arbre où le nœud est écrit.
-        let (masked, frames) = match placed {
-            Some((parent, frames)) => (parent || node.a11y.hidden, frames),
-            None => (hidden.contains(&id), Vec::new()),
-        };
-        if !masked {
-            out.push(id);
-        }
-        open.push(Open {
-            node,
-            hidden: masked,
-            frames,
-            next: 0,
-        });
-    }
-    out
-}
-
-/// Nœud rendu dont la descendance n'est peut-être pas encore entièrement rendue.
-struct Open<'d> {
-    node: &'d Node,
-    /// Masqué lui-même ou par un ancêtre rendu.
-    hidden: bool,
-    /// Instances développées autour du nœud, de la plus externe à celle dont le composant le
-    /// contient.
-    frames: Vec<&'d Node>,
-    /// Rang, parmi ce que le nœud rend, à partir duquel un enfant peut encore venir : ce qu'il a
-    /// déjà rendu ne revient pas sous lui (un même nœud peut revenir sous une autre instance).
-    next: usize,
-}
-
-impl<'d> Open<'d> {
-    /// Rang de `child` parmi ce que ce nœud rend, avec les instances développées autour de lui ;
-    /// `None` si ce nœud ne peut pas, ou plus, le rendre.
-    fn place(&self, doc: &'d Document, page: &Page, child: &Node) -> Option<(usize, Vec<&'d Node>)> {
-        let (position, frames) = match &self.node.kind {
-            // Racine du composant de l'instance.
-            NodeKind::ComponentInstance(props) => {
-                if doc.component(&props.component)?.root != child.id {
-                    return None;
-                }
-                let mut frames = self.frames.clone();
-                frames.push(self.node);
-                (0, frames)
-            }
-            // Racine de la page, à la place du slot `page` du layout.
-            NodeKind::Slot(slot) if slot.name == PAGE_SLOT && child.id == page.root => (0, Vec::new()),
-            // Contenu du slot : enfants de l'instance qui le ciblent, rendus dans le contexte qui
-            // entoure l'instance.
-            NodeKind::Slot(slot) => {
-                let (instance, outer) = self.frames.split_last()?;
-                if child.meta.slot.as_deref().unwrap_or(DEFAULT_SLOT) != slot.name {
-                    return None;
-                }
-                let position = instance.children.iter().position(|c| *c == child.id)?;
-                (position, outer.to_vec())
-            }
-            _ => {
-                let position = self.node.children.iter().position(|c| *c == child.id)?;
-                (position, self.frames.clone())
-            }
-        };
-        (position >= self.next).then_some((position, frames))
-    }
-}
-
 /// Vrai si le contenu rendu du nœud fournit un nom accessible : texte visible, image avec `alt`,
 /// icône ou image étiquetée. Les instances sont développées (arbre du composant avec les valeurs
 /// des props, contenu des slots) ; un sous-arbre masqué ne compte pas.
-fn has_named_content(doc: &Document, id: &NodeId) -> bool {
+fn has_named_content(doc: &Document, id: &NodeId, context: &[NodeId]) -> bool {
     let Some(node) = doc.node(id) else { return false };
+    let frames = context
+        .iter()
+        .filter_map(|i| {
+            let instance = doc.node(i)?;
+            let NodeKind::ComponentInstance(props) = &instance.kind else {
+                return None;
+            };
+            Some(Frame {
+                instance,
+                props,
+                component: doc.component(&props.component)?,
+            })
+        })
+        .collect();
     let mut search = NameSearch {
         doc,
-        frames: Vec::new(),
+        frames,
         seen: BTreeSet::new(),
     };
     node.children.iter().any(|child| search.named(child))
@@ -397,31 +346,65 @@ fn non_empty(text: &Option<String>) -> bool {
     text.as_deref().is_some_and(|t| !t.trim().is_empty())
 }
 
+/// Valeur effective d'un champ lié à une prop, avec l'instance qui la surcharge (`None` : valeur
+/// par défaut de la prop).
+type BoundField<'d> = dyn Fn(BindableField) -> Option<(&'d PropValue, Option<&'d NodeId>)> + 'd;
+
+/// Texte effectif d'un champ : valeur liée à une prop (avec l'instance qui la surcharge), sinon
+/// valeur écrite sur le nœud.
+fn text_field<'d>(
+    bound: &BoundField<'d>,
+    field: BindableField,
+    written: Option<&'d str>,
+) -> (Option<&'d str>, Option<&'d NodeId>) {
+    match bound(field) {
+        Some((PropValue::Text(value), by)) => (Some(value.as_str()), by),
+        _ => (written, None),
+    }
+}
+
+fn non_empty_str(text: Option<&str>) -> bool {
+    text.is_some_and(|t| !t.trim().is_empty())
+}
+
 /// Règles d'un nœud exposé aux technologies d'assistance (les nœuds masqués sont écartés avant).
-fn node_rules(ctx: &Context<'_>, node: &Node, issues: &mut Vec<Issue>) {
+/// `context` : instances développées autour du nœud ; `bound` : champs liés à des props. Le
+/// problème est signalé sur l'instance dont la surcharge le cause, sinon sur le nœud.
+fn node_rules<'d>(
+    ctx: &Context<'d>,
+    node: &'d Node,
+    context: &[NodeId],
+    bound: &BoundField<'d>,
+    issues: &mut Vec<Issue>,
+) {
     let id = &node.id;
     match &node.kind {
-        NodeKind::Image(image) if image.alt.trim().is_empty() => {
-            issues.push(Issue::error(
-                C::A11yImgAlt,
-                Some(id),
-                "image needs alt text (or be marked hidden if decorative)",
-            ));
+        NodeKind::Image(image) => {
+            let (alt, by) = text_field(bound, BindableField::ImageAlt, Some(image.alt.as_str()));
+            if !non_empty_str(alt) {
+                issues.push(Issue::error(
+                    C::A11yImgAlt,
+                    Some(by.unwrap_or(id)),
+                    "image needs alt text (or be marked hidden if decorative)",
+                ));
+            }
         }
         NodeKind::Button(button) => {
-            if !(non_empty(&button.label) || non_empty(&node.a11y.label) || has_named_content(ctx.doc, id)) {
+            let (label, by) = text_field(bound, BindableField::Label, button.label.as_deref());
+            if !(non_empty_str(label) || non_empty(&node.a11y.label) || has_named_content(ctx.doc, id, context)) {
                 issues.push(Issue::error(
                     C::A11yAccessibleName,
-                    Some(id),
+                    Some(by.unwrap_or(id)),
                     "button has no accessible name",
                 ));
             }
         }
         NodeKind::Link(link) => {
-            if !(non_empty(&link.label) || non_empty(&node.a11y.label) || has_named_content(ctx.doc, id)) {
+            let (label, by) = text_field(bound, BindableField::Label, link.label.as_deref());
+            if !(non_empty_str(label) || non_empty(&node.a11y.label) || has_named_content(ctx.doc, id, context)) {
                 issues.push(Issue::error(
                     C::A11yAccessibleName,
-                    Some(id),
+                    Some(by.unwrap_or(id)),
                     "link has no accessible name",
                 ));
             }

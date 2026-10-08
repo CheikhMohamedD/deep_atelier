@@ -4,7 +4,6 @@
 //! qui dépend du contenu, est mesurée dans le navigateur.
 
 use crate::command::Command;
-use crate::document::Document;
 use crate::id::{NodeId, NodeRef};
 use crate::node::{Node, NodeKind, TextRole};
 use crate::query::node_colors;
@@ -24,9 +23,34 @@ pub(super) fn check(ctx: &Context<'_>, issues: &mut Vec<Issue>) {
         if ctx.owner(&node.id).is_none() {
             continue;
         }
-        responsive(ctx.doc, node, issues);
+        responsive(ctx, node, issues);
         quality(node, issues);
     }
+}
+
+/// Taille de texte héritée à `base`, à chaque rendu du nœud (ancêtres rendus, slots exclus), ou
+/// dans l'arbre où il est écrit s'il n'est jamais rendu.
+fn inherited_font_sizes(ctx: &Context<'_>, node: &Node) -> Vec<FontSize> {
+    let doc = ctx.doc;
+    let own = |n: &Node| n.style.font_size.as_ref().map(|v| v.base);
+    if !ctx.is_rendered(&node.id) {
+        let size = std::iter::once(node.id.clone())
+            .chain(doc.ancestors(&node.id))
+            .find_map(|n| doc.node(&n).and_then(own))
+            .unwrap_or(FontSize::Base);
+        return vec![size];
+    }
+    ctx.occurrences(&node.id)
+        .into_iter()
+        .map(|(_, render, index)| {
+            render
+                .chain(index)
+                .filter_map(|i| doc.node(&render.nodes[i].id))
+                .filter(|n| !matches!(n.kind, NodeKind::Slot(_)))
+                .find_map(own)
+                .unwrap_or(FontSize::Base)
+        })
+        .collect()
 }
 
 fn set_style(id: &NodeId, style: StylePatch) -> Command {
@@ -75,7 +99,8 @@ fn touch_axis(
     ))
 }
 
-fn responsive(doc: &Document, node: &Node, issues: &mut Vec<Issue>) {
+fn responsive(ctx: &Context<'_>, node: &Node, issues: &mut Vec<Issue>) {
+    let doc = ctx.doc;
     let id = &node.id;
     let unit = doc.tokens.spacing_unit;
     let base = Breakpoint::Base;
@@ -220,11 +245,10 @@ fn responsive(doc: &Document, node: &Node, issues: &mut Vec<Issue>) {
     }
 
     if matches!(node.kind, NodeKind::Input(_)) {
-        let size = std::iter::once(id.clone())
-            .chain(doc.ancestors(id))
-            .find_map(|n| doc.node(&n)?.style.font_size.as_ref().map(|v| v.base))
-            .unwrap_or(FontSize::Base);
-        if size.to_px() < 16.0 {
+        let small = inherited_font_sizes(ctx, node)
+            .into_iter()
+            .any(|size| size.to_px() < 16.0);
+        if small {
             let fix = StylePatch {
                 font_size: Some(Some(ResponsivePatch::at(base, FontSize::Base))),
                 ..StylePatch::default()

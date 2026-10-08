@@ -1,0 +1,17 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Atelier cuisine",
+};
+
+export default function AccueilPage() {
+  return (
+    <main className="p-8">
+      <h1>Accueil</h1>
+    </main>
+  );
+}

@@ -1,0 +1,44 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import Image from "next/image";
+import Link from "next/link";
+import type { AriaAttributes } from "react";
+import { twMerge } from "tailwind-merge";
+
+type ProfileProps = AriaAttributes & {
+  photo?: string;
+  photoAlt?: string;
+  url?: string;
+  linkLabel?: string;
+  className?: string;
+};
+
+export function Profile({
+  photo = "/placeholders/square-portrait.svg",
+  photoAlt = "Portrait",
+  url = "/",
+  linkLabel = "Profil",
+  className,
+  ...rest
+}: ProfileProps) {
+  return (
+    <div {...rest} className={twMerge("flex gap-3 items-center", className)}>
+      <Image
+        src={photo}
+        alt={photoAlt}
+        width={800}
+        height={800}
+        unoptimized={photo.endsWith(".svg")}
+        className="w-12 h-12 rounded-full object-cover"
+      />
+      <Link
+        href={url}
+        className="font-medium focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      >
+        {linkLabel}
+      </Link>
+    </div>
+  );
+}

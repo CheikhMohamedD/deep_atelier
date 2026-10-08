@@ -1,0 +1,13 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+"use client";
+
+export function Bonjour() {
+  return (
+    <button type="button" onClick={() => window.alert("Bonjour")}>
+      Dire bonjour
+    </button>
+  );
+}

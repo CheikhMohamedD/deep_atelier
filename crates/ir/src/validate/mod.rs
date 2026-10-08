@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::command::Command;
-use crate::document::{Document, Owner};
-use crate::id::{ComponentId, NodeId};
-use crate::node::{DEFAULT_SLOT, NodeKind, PAGE_SLOT};
+use crate::document::{Document, Owner, Page};
+use crate::id::NodeId;
+use crate::render::RenderTree;
 use crate::style::responsive::Breakpoint;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS, JsonSchema)]
@@ -41,10 +41,12 @@ pub enum IssueCode {
     TreeInconsistent,
     OrphanNode,
     Cycle,
+    RootNotContainer,
     LeafHasChildren,
     EmptyInteractive,
     NestedInteractive,
     ListItemOutsideList,
+    ListChildNotItem,
     SlotOutsideComponent,
     LayoutPageSlot,
     DuplicateSlot,
@@ -170,10 +172,19 @@ pub fn validate(doc: &Document) -> Vec<Issue> {
     issues
 }
 
-/// Contexte partagé : propriétaire de chaque nœud atteignable depuis une racine.
+/// Contexte partagé : propriétaire de chaque nœud atteignable depuis une racine, rendu de chaque
+/// page, nœuds rendus par au moins une page.
 pub(crate) struct Context<'a> {
     pub doc: &'a Document,
     pub owners: BTreeMap<NodeId, Owner>,
+    /// Rendu de chaque page, dans l'ordre des pages.
+    pub renders: Vec<(&'a Page, RenderTree)>,
+    /// Occurrences rendues de chaque nœud : (rang de la page, rang dans son rendu). Les règles
+    /// qui dépendent du contexte de rendu jugent un nœud à chacun de ses rendus ; un nœud jamais
+    /// rendu (composant sans instance, layout sans page) est jugé dans l'arbre où il est écrit.
+    rendered: BTreeMap<NodeId, Vec<(usize, usize)>>,
+    /// Ancres rendues dans chaque page (layout, page, composants développés), par rang de page.
+    anchors: Vec<BTreeSet<String>>,
 }
 
 impl<'a> Context<'a> {
@@ -184,85 +195,58 @@ impl<'a> Context<'a> {
                 owners.entry(id).or_insert_with(|| owner.clone());
             }
         }
-        Self { doc, owners }
+        let renders: Vec<(&Page, RenderTree)> = doc.pages.iter().map(|p| (p, RenderTree::of_page(doc, p))).collect();
+        let mut rendered: BTreeMap<NodeId, Vec<(usize, usize)>> = BTreeMap::new();
+        for (page, (_, tree)) in renders.iter().enumerate() {
+            for (index, node) in tree.nodes.iter().enumerate() {
+                rendered.entry(node.id.clone()).or_default().push((page, index));
+            }
+        }
+        let anchors = renders
+            .iter()
+            .map(|(_, tree)| {
+                tree.nodes
+                    .iter()
+                    .filter_map(|n| doc.node(&n.id).and_then(|n| n.meta.anchor.clone()))
+                    .collect()
+            })
+            .collect();
+        Self {
+            doc,
+            owners,
+            renders,
+            rendered,
+            anchors,
+        }
     }
 
     pub fn owner(&self, id: &NodeId) -> Option<&Owner> {
         self.owners.get(id)
     }
 
-    /// Nœuds d'une page dans l'ordre de rendu : layout (slot `page` remplacé par la page),
-    /// instances développées (contenu des slots compris).
-    pub fn render_order(&self, page: &crate::document::Page) -> Vec<NodeId> {
-        let mut out = Vec::new();
-        let mut stack = Vec::new();
-        match page.layout.as_ref().and_then(|l| self.doc.layout(l)) {
-            Some(layout) => self.walk(&layout.root, Some(&page.root), None, &mut stack, &mut out),
-            None => self.walk(&page.root, None, None, &mut stack, &mut out),
-        }
-        out
+    pub fn is_rendered(&self, id: &NodeId) -> bool {
+        self.rendered.contains_key(id)
     }
 
-    fn walk(
-        &self,
-        id: &NodeId,
-        page_root: Option<&NodeId>,
-        instance: Option<&NodeId>,
-        components: &mut Vec<ComponentId>,
-        out: &mut Vec<NodeId>,
-    ) {
-        let Some(node) = self.doc.node(id) else { return };
-        if out.len() > self.doc.nodes.len() * 4 {
-            return;
-        }
-        out.push(id.clone());
-        match &node.kind {
-            NodeKind::Slot(slot) if slot.name == PAGE_SLOT && page_root.is_some() => {
-                if let Some(page_root) = page_root {
-                    self.walk(page_root, None, None, components, out);
-                }
-                return;
-            }
-            NodeKind::Slot(slot) => {
-                if let Some(instance) = instance.and_then(|i| self.doc.node(i)) {
-                    for child in &instance.children {
-                        let target = self.doc.node(child).and_then(|c| c.meta.slot.clone());
-                        if target.as_deref().unwrap_or(DEFAULT_SLOT) == slot.name {
-                            self.walk(child, page_root, None, components, out);
-                        }
-                    }
-                }
-                return;
-            }
-            NodeKind::ComponentInstance(props) => {
-                if components.contains(&props.component) {
-                    return;
-                }
-                if let Some(component) = self.doc.component(&props.component) {
-                    components.push(props.component.clone());
-                    self.walk(&component.root, page_root, Some(id), components, out);
-                    components.pop();
-                }
-                return;
-            }
-            _ => {}
-        }
-        for child in &node.children {
-            self.walk(child, page_root, instance, components, out);
-        }
+    /// Occurrences rendues d'un nœud : page, rendu de la page, rang dans ce rendu.
+    pub fn occurrences(&self, id: &NodeId) -> Vec<(&'a Page, &RenderTree, usize)> {
+        self.rendered
+            .get(id)
+            .map(|list| {
+                list.iter()
+                    .map(|&(page, index)| (self.renders[page].0, &self.renders[page].1, index))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
-    /// Ancres définies dans une page (page + layout).
-    pub fn page_anchors(&self, page: &crate::document::Page) -> BTreeSet<String> {
-        let mut roots = vec![page.root.clone()];
-        if let Some(layout) = page.layout.as_ref().and_then(|l| self.doc.layout(l)) {
-            roots.push(layout.root.clone());
-        }
-        roots
+    /// Ancres rendues dans une page (layout, page, composants développés).
+    pub fn page_anchors(&self, page: &Page) -> &BTreeSet<String> {
+        static NONE: BTreeSet<String> = BTreeSet::new();
+        self.renders
             .iter()
-            .flat_map(|r| self.doc.subtree(r))
-            .filter_map(|id| self.doc.node(&id).and_then(|n| n.meta.anchor.clone()))
-            .collect()
+            .position(|(p, _)| p.id == page.id)
+            .map_or(&NONE, |rank| &self.anchors[rank])
     }
 }
 

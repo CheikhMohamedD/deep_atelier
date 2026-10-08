@@ -1,0 +1,111 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+import { FeatureCard } from "@/components/FeatureCard";
+import { NewsletterForm } from "@/components/NewsletterForm";
+import { PricingCard } from "@/components/PricingCard";
+
+export const metadata: Metadata = {
+  title: "Deep Atelier — dessinez votre site, livrez du vrai code",
+  description:
+    "Un website builder pour développeurs : canvas visuel, prompt et code React propre que vous possédez.",
+};
+
+export default function AccueilPage() {
+  return (
+    <main>
+      <section className="px-4 py-20 md:py-32">
+        <div className="flex flex-col gap-6 items-center max-w-4xl mx-auto text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-balance md:text-6xl">
+            Dessinez votre site,{" "}
+            <span className="text-primary">livrez du vrai code</span>
+          </h1>
+          <p className="max-w-2xl text-lg text-muted-foreground text-pretty md:text-xl">
+            Deep Atelier transforme chaque geste sur le canvas et chaque prompt
+            en code React, TypeScript et Tailwind que vous possédez, sans
+            dépendance au builder.
+          </p>
+          <div className="flex flex-col gap-3 justify-center w-full sm:flex-row sm:w-auto">
+            <Link
+              href="/#pricing"
+              className="px-6 py-3 font-medium text-center text-primary-foreground bg-primary rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              Commencer gratuitement
+            </Link>
+            <Link
+              href="/#features"
+              className="px-6 py-3 font-medium text-center border border-border rounded-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            >
+              Voir les fonctionnalités
+            </Link>
+          </div>
+          <Image
+            src="/placeholders/video-apercu-de-l-editeur.svg"
+            alt="Aperçu de l'éditeur Deep Atelier"
+            width={1280}
+            height={720}
+            preload
+            unoptimized
+            className="w-full mt-6 border border-border rounded-xl"
+          />
+        </div>
+      </section>
+      <section id="features" className="px-4 py-16 bg-muted md:py-24">
+        <div className="flex flex-col gap-10 max-w-6xl mx-auto">
+          <h2 className="text-3xl font-bold tracking-tight text-center text-balance md:text-4xl">
+            Tout pour livrer vite
+          </h2>
+          <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <FeatureCard
+              title="Canvas d'abord"
+              description="Construisez à la souris sur un vrai rendu, en mobile d'abord."
+            />
+            <FeatureCard
+              title="Prompt intégré"
+              description="Décrivez une section : l'IA écrit des commandes que vous pouvez éditer."
+            />
+            <FeatureCard
+              title="Code à vous"
+              description="Next.js, TypeScript strict et Tailwind, exportés sans aucune dépendance."
+            />
+          </ul>
+        </div>
+      </section>
+      <section id="pricing" className="px-4 py-16 md:py-24">
+        <div className="flex flex-col gap-10 max-w-5xl mx-auto">
+          <h2 className="text-3xl font-bold tracking-tight text-center text-balance md:text-4xl">
+            Des tarifs simples
+          </h2>
+          <ul className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <PricingCard
+              name="Découverte"
+              price="0 €"
+              description="Un projet, export ZIP."
+              cta="Essayer"
+            />
+            <PricingCard
+              name="Pro"
+              price="19 €"
+              description="Projets illimités, push GitHub."
+              cta="Passer Pro"
+              tone="featured"
+            />
+            <PricingCard
+              name="Équipe"
+              price="49 €"
+              description="Collaboration et bibliothèque partagée."
+              cta="Nous contacter"
+            />
+          </ul>
+        </div>
+      </section>
+      <section id="contact" className="px-4 py-16 bg-muted md:py-24">
+        <NewsletterForm className="mx-auto" />
+      </section>
+    </main>
+  );
+}

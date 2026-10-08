@@ -784,6 +784,8 @@ consignée ici (question → décision, avec la date).
   réservés). Commits signés de l'adresse noreply GitHub du propriétaire (voir `CLAUDE.md`).
 - **Développement dans des sessions Claude Code cloud**, rien n'est installé sur le poste local.
   L'image cloud fournit rustc/cargo, Node 22 avec pnpm, Docker et PostgreSQL 16.
+  - **Complément (2026-10-07)** : le développement se fait aussi en local (rustup avec la toolchain
+    du dépôt, Node, pnpm). Une seule session, locale ou cloud, travaille sur une branche à la fois.
 - **Outillage complémentaire** (cible `wasm32-unknown-unknown`, `wasm-bindgen-cli`, navigateurs
   Playwright) : ajouté au script de setup de l'environnement cloud à l'étape (c), pour être mis en
   cache. Les téléchargements de releases GitHub d'autres dépôts sont bloqués : `wasm-bindgen-cli`
@@ -855,9 +857,9 @@ Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux point
 
 17. Un saut de niveau de titre n'est signalé qu'entre deux titres consécutifs ; l'absence de H1 ou
     de `Main` est un avertissement (une page en construction n'est pas bloquée).
-18. Le contraste est calculé dans les ancêtres du même arbre (une instance ne connaît pas le fond de
-    la page hôte), sans les images de fond, l'opacité des ancêtres ni les états d'interaction ; en
-    mode sombre seulement si un token définit une valeur sombre.
+18. Le contraste est calculé dans les ancêtres rendus du texte (point 22), sans les images de fond,
+    l'opacité des ancêtres ni les états d'interaction ; en mode sombre seulement si un token définit
+    une valeur sombre.
 19. Les cibles tactiles ne sont contrôlées que sur les dimensions explicites ; la taille réelle et le
     débordement horizontal relèvent de la mesure dans le navigateur (étapes c et f).
 
@@ -867,12 +869,185 @@ Le schéma des §§ 3 à 5 est implémenté tel quel dans `crates/ir`, aux point
     l'étape (c). En (a), la génération TypeScript (ts-rs) et JSON Schema (schemars) est couverte par
     des tests, dont l'absence de récursion dans le schéma de `Command` (mode `strict`).
 
-**Reste à faire de la revue de la PR #1 (constaté le 2026-10-07)**
+**Revue de la PR #1 : changements de comportement (complété le 2026-10-07)**
 
-21. La PR #1 a été fusionnée avant son dernier lot de corrections, « validation (schéma, ordre de
-    rendu) » : 14 défauts confirmés par la revue, dont la perte du contenu des slots imbriqués dans
-    l'ordre de rendu (`render_order`). Le détail des constats n'a pas été conservé. Aucun lot de
-    correction n'a touché `validate/schema.rs`, `validate/mod.rs` ni `validate/contrast.rs` :
-    ils sont à ré-auditer, puis à corriger avec des tests de non-régression, avant l'étape (b).
-22. Ce § 14 n'a pas encore été complété avec les changements de comportement issus des quatre lots
-    de corrections fusionnés (`ops-history`, `lower`, `style`, `validate-a11y-resp`).
+La PR #1 a été fusionnée avant son dernier lot de corrections, « validation (schéma, ordre de
+rendu) », dont le détail n'avait pas été conservé : la validation a été ré-auditée, et chaque défaut
+confirmé est couvert par `crates/ir/tests/regressions_validate_schema_render.rs`.
+
+21. **Rendu des pages** (`crates/ir/src/render.rs`, partagé par la validation et les commandes) :
+    `RenderTree::of_page` rend le layout, la page à la place de son slot `page` (une seule fois, et
+    seulement le slot écrit dans le layout), chaque instance développée, et le contenu d'un slot à
+    la place du slot, dans le contexte où l'instance est écrite. Corrigé : contenu des slots
+    imbriqués perdu, instance d'un composant dans le contenu du slot d'une instance du même
+    composant ignorée, longues pages tronquées, slot `page` d'un composant pris pour celui du
+    layout. Un nœud lié à une prop `Visible` qui vaut `false` dans une instance n'y est pas rendu.
+22. **Règles jugées au rendu.** Un nœud rendu est jugé à chacun de ses rendus ; un nœud jamais
+    rendu (composant sans instance, layout sans page) dans l'arbre où il est écrit. Le problème est
+    signalé sur le nœud placé dans l'élément parent (l'instance qui rend une racine de composant).
+    - Placement (`col_span`, `grow`, `shrink`, `align_self`, `order`) : permis selon les hôtes au
+      rendu, exactement comme les commandes (le contenu d'un slot n'est plus refusé à tort).
+    - Listes : un élément de liste est jugé à sa place au rendu ; une liste ne contient que des
+      éléments de liste ou du code libre (nouveau code `LIST_CHILD_NOT_ITEM`, exigé par l'audit
+      Lighthouse « list »).
+    - Éléments interactifs imbriqués à travers les composants et les slots.
+    - Ancres : celles d'un composant comptent pour la page qui le rend (liens valides, doublons
+      signalés) ; un lien vers une ancre est vérifié sur chaque page qui le rend, avec le lien
+      effectif (surcharge ou défaut d'une prop `Href`).
+    - Contraste : fond, couleur et taille du texte viennent des ancêtres rendus (le composant qui
+      accueille un contenu de slot, la page qui accueille une instance ; une instance porte le
+      style de la racine de son composant).
+    - Accessibilité : alt, libellés et contenu nommant liés à des props sont jugés avec la valeur
+      de chaque instance ; une surcharge vide est signalée sur l'instance.
+    - Taille de texte d'un champ : héritée des ancêtres rendus.
+23. **Règles des commandes reprises par la validation** (un document chargé, ou un brouillon IA,
+    ne peut plus les contourner) :
+    - surcharges de variantes : propriétés permises selon le type et les hôtes au rendu,
+      propriétés d'état seulement dans un état, `none` réservé aux tailles max, tokens existants ;
+    - noms des props et des axes de variantes en camelCase ; options non vides et uniques.
+24. **Nouvelles règles de schéma.**
+    - Props, axes de variantes et slots deviennent des props TypeScript : noms camelCase, uniques
+      entre eux, et pas `children` (sauf le slot par défaut), `className`, `key` ni `ref` ;
+      un champ n'est lié qu'à une prop. Le nom de slot `page` est réservé aux layouts, qui
+      n'ont pas d'autre slot. La commande d'insertion refuse un nom de slot non camelCase.
+    - Une instance ne choisit qu'une option par axe de variantes.
+    - Routes : un paramètre n'apparaît qu'une fois par route, et deux routes nomment pareil le
+      paramètre qu'elles placent au même endroit de l'arborescence (contrainte de l'App Router).
+    - Images : URL http(s) absolue, asset de type image, dimensions intrinsèques positives ; le
+      favicon est une image, l'image OG un PNG, JPEG, GIF ou WebP. Les valeurs de props (défauts et
+      surcharges) suivent les règles du champ qu'elles remplissent.
+    - Les racines de page et de layout sont des conteneurs (nouveau code `ROOT_NOT_CONTAINER`).
+    - Un nœud d'un cycle de parents n'est plus signalé en plus comme orphelin.
+25. **Lots fusionnés dans la PR #1** (tests `regressions_*.rs`) :
+    - `ops-history` : l'acceptation partielle d'un brouillon IA refuse une unité qui embarque une
+      valeur (entière, copiée, héritée) ou une entité d'une unité rejetée, ou dont le retrait
+      emporterait des nœuds qu'une unité rejetée avait supprimés ou déplacés ; une erreur déjà
+      présente avant le brouillon ne le bloque pas ; `InsertSubtree` refuse un sous-arbre
+      incohérent sans rien modifier.
+    - `lower` : une commande ne peut pas faire sortir de la sélection ; l'IA ne crée pas de
+      `RawCode` par duplication ni par détachement ; un nœud déplacé, enveloppé ou désenveloppé
+      perd le placement et le slot que son nouvel hôte n'admet pas ; le détachement garde slot,
+      a11y, verrou, plateforme et échappatoires web ; l'extraction d'un composant refuse ce dont
+      l'arbre d'origine dépend (slots, références qui franchissent sa frontière, cibles de props
+      ou de variantes) ; une page liée depuis ailleurs ne peut pas être supprimée ; une prop
+      `Visible` détachée à `true` affiche le nœud.
+    - `style` : effacer une surcharge absente ne crée pas la propriété ; `null` est refusé pour
+      `base` ; schémas des valeurs alignés sur leurs parseurs (noms de tokens réservés annoncés).
+    - `validate-a11y-resp` : les corrections responsive ne touchent que le mobile ; une cible
+      tactile se juge sur sa taille et ses minimums ; `a11y.hidden` masque tout le rendu du nœud ;
+      l'alt d'une image nomme son bouton ou son lien ; une instance ne nomme un bouton que par son
+      contenu rendu.
+
+---
+
+## 15. Étape (b) : compilateur web (2026-10-08)
+
+`crates/compiler-web` : `compile(&Document, Mode) -> Project` produit un projet Next.js 16 complet
+(App Router, TypeScript strict, Tailwind v4) qui ne dépend pas de Deep Atelier. Modules : `plan`
+(noms, îlots clients, assets, hôtes d'images), `elements` (nœuds → JSX), `classes` (style →
+classes), `theme` (tokens → CSS), `project` (assemblage et gabarit), `doc`, `jsx` et `module`
+(impression façon Prettier), `names`, `demo` (documents de démonstration). Ils remplacent la liste
+de fichiers prévue au § 2 ; `tools/export-check/` s'ajoute à l'arborescence (point 12).
+
+**Projet exporté**
+
+1. Arborescence :
+   - `app/layout.tsx` : `<html lang>`, polices `next/font/google`, titre et favicon du site ;
+     `app/globals.css` (point 6) ; `app/icon.svg` quand aucun favicon n'est choisi (initiale du
+     site sur `primary`, pour éviter un `favicon.ico` en 404) ;
+   - un groupe de routes par layout de l'IR : `app/(<layout>)/layout.tsx`, où le slot `page`
+     devient `{children}` ; chaque page sous son groupe (`app/(<layout>)/<route>/page.tsx`,
+     segments dynamiques `[slug]`), avec ses métadonnées (titre, description, image OG) ;
+   - `components/<Nom>.tsx` par composant ou îlot client (point 4), `components/raw/<Nom>.tsx` par
+     bloc de code libre client ;
+   - `public/assets/<id>-<fichier>` (contenu copié depuis le stockage par l'export, étape i) et
+     `public/placeholders/*.svg` (images de remplissage) ;
+   - configuration du gabarit `create-next-app` 16.4 : `package.json` aux versions exactes (`next`,
+     `react`, `react-dom`, et `lucide-react` 1.52.0 comme le catalogue de l'IR ; `lucide-react` et
+     `tailwind-merge` seulement s'ils servent), `tsconfig.json`, `eslint.config.mjs`,
+     `next.config.ts` (hôtes des images distantes dans `images.remotePatterns`),
+     `pnpm-workspace.yaml`, `.gitignore`, `AGENTS.md`, `README.md`. Pas de `pnpm-lock.yaml` : il
+     est créé au premier `pnpm install`.
+2. Mise en forme : le code sort tel que Prettier 3.9.9 (réglages par défaut) l'écrirait.
+   L'imprimeur de documents de Prettier est porté en Rust (`doc.rs` : groupes, `fill`,
+   `conditionalGroup`, propagation des sauts, largeur 80 en colonnes Unicode), avec ses règles JSX,
+   d'objets, de tableaux et d'imports (`jsx.rs`, `module.rs`). Seul le code libre est repris tel
+   qu'écrit, réindenté.
+3. Composants : une fonction nommée par composant, props typées (`type <Nom>Props`) et défauts
+   dans la déstructuration ; variantes : union de littéraux et une table de classes par nœud visé
+   (`const toneClasses = {…} as const`) ; slots : props `ReactNode` (`children` pour le slot par
+   défaut) ; prop `Visible` : `if (!show) return null` sur la racine, `{show && …}` ailleurs. Selon
+   les instances, le composant accepte aussi :
+   - `className` (instance stylée, ou variantes sur la racine), fusionné par `twMerge`
+     (décision 5) ;
+   - `id` (instance ancrée), posé sur la racine ;
+   - `...rest`, typé `AriaAttributes` et étalé sur la racine, quand une instance porte une
+     étiquette, un masquage ou des attributs `data-*` / `aria-*` : ils s'appliquent à la racine
+     rendue, comme le supposent la validation et le détachement d'instance.
+4. Interactivité : un bouton `toggle` produit `useState`, `aria-expanded`, `aria-controls` (ancre
+   de la cible ou `useId`) et `onClick` ; sa cible porte `data-open` et la variante
+   `data-[open=true]:<affichage>`, qui l'affiche là où elle est masquée fermée. Dans une page ou un
+   layout, seul le plus petit sous-arbre qui contient les boutons et leurs cibles devient client :
+   un îlot (`components/Menu.tsx`, nommé d'après son rôle), le reste de la page reste rendu côté
+   serveur ; un îlot qui contient le slot `page` reçoit `children`. Un composant qui contient une
+   bascule est client en entier.
+5. Classes : base, puis `sm:` à `2xl:`, puis états ; dans chaque bloc, ordre fixe par famille
+   (affichage, disposition, placement, position, dimensions, marges, typographie, apparence,
+   transitions) ; côtés regroupés (`p-4`, `px-4 py-2`). Une base égale à la valeur initiale CSS
+   d'une propriété non héritée n'est pas émise (§ 14, point 3) ; une propriété héritée l'est
+   toujours, car un composant ou un contenu de slot n'hérite pas, au rendu, des ancêtres où il est
+   écrit.
+6. Thème : couleurs en variables CSS sur `:root`, valeurs sombres sous
+   `@media (prefers-color-scheme: dark)` (décision 4), exposées par `@theme inline` (`bg-primary`,
+   `font-display`) ; crans de rayon, d'ombre et d'espacement dans `@theme` seulement s'ils
+   diffèrent de ceux de Tailwind.
+7. Éléments : balise du rôle de chaque nœud ; `next/link` pour les liens internes, `<a>` pour les
+   autres (`rel="noopener noreferrer"` en nouvel onglet) ; `next/image` avec les dimensions
+   intrinsèques, `preload` pour l'image prioritaire (`priority` est déprécié en Next 16),
+   `unoptimized` pour un SVG ; icônes `lucide-react` (`aria-hidden`, ou `role="img"` et
+   `aria-label`) ; champ lié à son étiquette par `htmlFor` (id fixe dans une page, `useId` dans un
+   composant ou un îlot).
+8. Code libre : un `RawCode` serveur est inséré tel quel avec ses imports ; un `RawCode` client
+   devient `components/raw/<Nom>.tsx` (`"use client"`). Il doit suivre les règles de Next 16 avec
+   `cacheComponents` (par exemple, pas de `new Date()` au rendu hors d'un `Suspense`) : le
+   compilateur ne l'analyse pas avant l'étape (h).
+
+**Mode édition**
+
+9. `Mode::Edit` pose `data-atl-id` sur chaque élément, et chaque fichier donne la plage exacte de
+   l'élément de chaque nœud (`File::source_map`, en octets), pour le lien code ⇄ canvas des étapes
+   (g) et (h). `Mode::Export` ne laisse aucune trace de l'éditeur. Le canvas reste un interprète de
+   l'IR (§ 10, point 5) : il réutilisera `node_classes` et `RenderTree` à l'étape (c).
+
+**Validation**
+
+10. Contraste : chaque rendu applique les surcharges de la variante choisie par l'instance
+    (`render::variant_style`), comme `twMerge` à l'export. Le défaut a été révélé par Lighthouse
+    sur la landing de démonstration (description grise sur l'offre mise en avant) ; test
+    `crates/ir/tests/variant_contrast.rs`.
+
+**Vérification**
+
+11. Snapshots `insta` de chaque fichier de la landing de démonstration (`demo::landing`) et d'un
+    document « tout-en-un » (`demo::kitchen_sink` : slots nommés, variantes sur la racine et sur un
+    descendant, gardes `Visible`, composants client, props d'image et de lien, attributs transmis,
+    route dynamique, police Google, assets, code libre, nœud natif seul, échappatoires web).
+    S'y ajoutent la compilation déterministe et le mode édition (chaque nœud rendu a sa plage, et
+    chaque plage son `data-atl-id`).
+12. Job CI `export` : les tests écrivent les deux projets sur disque, puis `prettier --check`,
+    `pnpm build`, `pnpm lint`, et `tools/export-check/check.mjs` sur `next start` :
+    - aucun défilement horizontal à 390, 768 et 1280 px, en clair et en sombre ;
+    - aucune exception ni erreur d'hydratation (ni aucune erreur de console pour la landing) ;
+    - menu burger ouvert puis refermé à 390 px, remplacé par la navigation à 1280 px ;
+    - Lighthouse mobile ≥ 90 dans les quatre catégories, en clair et en sombre (landing de
+      démonstration : 99, 100, 100 et 100 en local).
+
+**Limites connues**
+
+13. `metadataBase` n'est pas défini (l'IR ne connaît pas l'URL du site) : Next l'avertit au build,
+    et l'URL de l'image OG est résolue sur `localhost`. À traiter avec le domaine de publication
+    (étape i).
+14. Les images de remplissage ne suivent pas le thème sombre.
+15. Une étiquette posée sur un nœud rendu en élément générique (`div`, `span`) ou en paragraphe est
+    émise telle quelle, alors qu'ARIA 1.2 interdit de nommer ces rôles (audit Lighthouse
+    `aria-prohibited-attr`). La validation de l'IR ne le signale pas encore.

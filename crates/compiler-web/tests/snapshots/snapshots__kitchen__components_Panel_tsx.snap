@@ -1,0 +1,61 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import type { AriaAttributes, ReactNode } from "react";
+import { twMerge } from "tailwind-merge";
+
+type PanelProps = AriaAttributes & {
+  heading?: string;
+  showHeading?: boolean;
+  showAside?: boolean;
+  density?: "compact" | "comfortable";
+  id?: string;
+  className?: string;
+  children?: ReactNode;
+  aside?: ReactNode;
+};
+
+const densityBodyClasses = {
+  compact: "gap-2",
+  comfortable: "gap-6",
+} as const;
+
+const densityClasses = {
+  compact: "p-4",
+  comfortable: "p-8",
+} as const;
+
+export function Panel({
+  heading = "Panneau",
+  showHeading = true,
+  showAside = true,
+  density = "comfortable",
+  id,
+  className,
+  children,
+  aside,
+  ...rest
+}: PanelProps) {
+  return (
+    <article
+      id={id}
+      {...rest}
+      className={twMerge(
+        "flex flex-col gap-4 p-6 border border-border rounded-lg",
+        densityClasses[density],
+        className,
+      )}
+    >
+      {showHeading && <h2 className="text-xl font-semibold">{heading}</h2>}
+      <div
+        className={twMerge("flex flex-col gap-3", densityBodyClasses[density])}
+      >
+        {children}
+      </div>
+      {showAside && (
+        <aside className="text-sm text-muted-foreground">{aside}</aside>
+      )}
+    </article>
+  );
+}

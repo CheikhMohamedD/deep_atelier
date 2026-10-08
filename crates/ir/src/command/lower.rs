@@ -22,6 +22,7 @@ use crate::node::{
 };
 use crate::op::Op;
 use crate::query;
+use crate::render::{PARENT_PROPS, style_prop_allowed};
 use crate::scope::{Origin, Scope};
 use crate::style::color::{ColorRef, ColorSource};
 use crate::style::responsive::{Breakpoint, Responsive, ResponsivePatch};
@@ -86,130 +87,6 @@ const CONTAINER_PROPS: [StyleProp; 6] = [
     StyleProp::Justify,
 ];
 
-/// Propriétés qui dépendent du type de conteneur du parent.
-const PARENT_PROPS: [StyleProp; 5] = [
-    StyleProp::ColSpan,
-    StyleProp::Grow,
-    StyleProp::Shrink,
-    StyleProp::AlignSelf,
-    StyleProp::Order,
-];
-
-/// Vrai si une propriété propre à la primitive est permise sur un nœud de ce type (mêmes règles
-/// que la validation du schéma).
-fn own_prop_allowed(prop: StyleProp, kind: &NodeKind) -> bool {
-    let own = kind.container().map(|(k, _)| k);
-    match prop {
-        StyleProp::Columns => own == Some(ContainerKind::Grid),
-        StyleProp::Direction | StyleProp::Wrap => own == Some(ContainerKind::Stack),
-        StyleProp::Gap | StyleProp::Align | StyleProp::Justify => {
-            matches!(own, Some(ContainerKind::Stack | ContainerKind::Grid))
-        }
-        StyleProp::ObjectFit => matches!(kind, NodeKind::Image(_)),
-        _ => true,
-    }
-}
-
-/// Vrai si une propriété de placement est permise sous un hôte de ce type de conteneur
-/// (`None` : hôte qui n'est pas un conteneur, ou racine du rendu).
-fn placement_allowed(prop: StyleProp, host: Option<ContainerKind>) -> bool {
-    match prop {
-        StyleProp::ColSpan => host == Some(ContainerKind::Grid),
-        StyleProp::Grow | StyleProp::Shrink => host == Some(ContainerKind::Stack),
-        StyleProp::AlignSelf | StyleProp::Order => {
-            matches!(host, Some(ContainerKind::Stack | ContainerKind::Grid))
-        }
-        _ => true,
-    }
-}
-
-/// Vrai si une propriété de style est permise sur ce nœud, sous chacun de ses hôtes au rendu
-/// (voir [`rendered_hosts`]) ; un nœud jamais rendu n'impose aucune contrainte de placement.
-fn style_prop_allowed(doc: &Document, prop: StyleProp, node: &Node) -> bool {
-    own_prop_allowed(prop, &node.kind)
-        && (!PARENT_PROPS.contains(&prop)
-            || rendered_hosts(doc, &node.id)
-                .into_iter()
-                .all(|host| placement_allowed(prop, host)))
-}
-
-/// Conteneurs qui accueillent un nœud au rendu, un par contexte de rendu possible. Les instances
-/// et les slots ne produisent pas d'élément : le contenu d'une instance est rendu à la place du
-/// slot qu'il cible dans le composant, une racine de composant à la place de chacune de ses
-/// instances, une racine de page à la place du slot `page` de son layout. `None` : hôte qui
-/// n'est pas un conteneur, ou racine du rendu. Liste vide : nœud jamais rendu (slot introuvable,
-/// composant sans instance, composant récursif) ou contextes trop nombreux pour être parcourus.
-fn rendered_hosts(doc: &Document, id: &NodeId) -> Vec<Option<ContainerKind>> {
-    // Des composants récursifs qui se transmettent des slots multiplient les contextes : au-delà
-    // de ce budget, les hôtes sont tenus pour inconnus.
-    let budget = 8 * (doc.nodes.len() + 1);
-    let mut hosts = Vec::new();
-    // (nœud, instances développées autour de lui, de la plus externe à la plus interne)
-    let mut pending: Vec<(NodeId, Vec<NodeId>)> = vec![(id.clone(), Vec::new())];
-    let mut visited = BTreeSet::new();
-    while let Some((current, chain)) = pending.pop() {
-        if !visited.insert((current.clone(), chain.clone())) {
-            continue;
-        }
-        if visited.len() > budget {
-            return Vec::new();
-        }
-        let Some(node) = doc.node(&current) else { continue };
-        if let Some(parent) = &node.parent {
-            let Some(parent) = doc.node(parent) else { continue };
-            match &parent.kind {
-                // Une pile plus longue que le nombre de composants trahit une récursion.
-                NodeKind::ComponentInstance(props) if chain.len() < doc.components.len() => {
-                    let Some(component) = doc.component(&props.component) else {
-                        continue;
-                    };
-                    let target = node.meta.slot.as_deref().unwrap_or(DEFAULT_SLOT);
-                    let mut inner = chain.clone();
-                    inner.push(parent.id.clone());
-                    for slot in doc.subtree(&component.root) {
-                        if matches!(doc.node(&slot).map(|n| &n.kind), Some(NodeKind::Slot(s)) if s.name == target) {
-                            pending.push((slot, inner.clone()));
-                        }
-                    }
-                }
-                NodeKind::ComponentInstance(_) => {}
-                kind => hosts.push(kind.container().map(|(k, _)| k)),
-            }
-            continue;
-        }
-        // Racine du composant d'une instance développée : l'instance tient sa place.
-        if let Some((instance, outer)) = chain.split_last() {
-            pending.push((instance.clone(), outer.to_vec()));
-            continue;
-        }
-        match doc.owner_of(&current) {
-            Some(Owner::Component(component)) => {
-                pending.extend(doc.instances_of(&component).into_iter().map(|i| (i, Vec::new())));
-            }
-            Some(Owner::Page(page)) => {
-                let layout = doc
-                    .page(&page)
-                    .and_then(|p| p.layout.as_ref())
-                    .and_then(|l| doc.layout(l));
-                match layout {
-                    Some(layout) => {
-                        for slot in doc.subtree(&layout.root) {
-                            if matches!(doc.node(&slot).map(|n| &n.kind), Some(NodeKind::Slot(s)) if s.name == PAGE_SLOT)
-                            {
-                                pending.push((slot, Vec::new()));
-                            }
-                        }
-                    }
-                    None => hosts.push(None),
-                }
-            }
-            Some(Owner::Layout(_)) => hosts.push(None),
-            None => {}
-        }
-    }
-    hosts
-}
-
 /// Nœud référencé par un autre du même arbre : cible d'une action de bouton ou champ d'une
 /// étiquette.
 fn node_reference(kind: &NodeKind) -> Option<&NodeId> {
@@ -255,7 +132,7 @@ fn is_pascal_case(name: &str) -> bool {
 }
 
 fn is_prop_name(name: &str) -> bool {
-    name.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && name.chars().all(|c| c.is_ascii_alphanumeric())
+    crate::id::is_camel_case(name)
 }
 
 /// Remplace dans un `kind` les références internes à un sous-arbre copié.
@@ -969,9 +846,16 @@ impl<'a> Lowering<'a> {
                     variants: variants.clone(),
                 })
             }
-            KindSpec::Slot { name } => NodeKind::Slot(SlotProps {
-                name: name.clone().unwrap_or_else(|| DEFAULT_SLOT.to_owned()),
-            }),
+            KindSpec::Slot { name } => {
+                let name = name.clone().unwrap_or_else(|| DEFAULT_SLOT.to_owned());
+                // Le nom devient une prop TypeScript du composant.
+                if !is_prop_name(&name) {
+                    return Err(CommandError::InvalidCommand(format!(
+                        "slot name `{name}` must be camelCase"
+                    )));
+                }
+                NodeKind::Slot(SlotProps { name })
+            }
             KindSpec::RawCode { code, imports, client } => {
                 if self.origin.is_ai() {
                     return Err(CommandError::Forbidden("RawCode creation".to_owned()));

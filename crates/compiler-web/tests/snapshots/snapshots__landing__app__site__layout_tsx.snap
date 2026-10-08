@@ -1,0 +1,27 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+import { Menu } from "@/components/Menu";
+
+export default function SiteLayout({ children }: LayoutProps<"/">) {
+  return (
+    <>
+      <header className="sticky top-0 z-40 bg-background border-b border-border">
+        <Menu />
+      </header>
+      {children}
+      <footer className="border-t border-border">
+        <div className="flex flex-col gap-4 justify-between max-w-6xl mx-auto px-4 py-8 text-sm text-muted-foreground md:flex-row">
+          <p>© 2026 Deep Atelier. Code ouvert, sans dépendance.</p>
+          <a
+            href="mailto:contact@example.com"
+            className="underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            contact@example.com
+          </a>
+        </div>
+      </footer>
+    </>
+  );
+}

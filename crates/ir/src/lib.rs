@@ -3,6 +3,7 @@
 //! - [`document`], [`node`], [`tokens`], [`style`] : le schéma (aucun concept DOM/CSS).
 //! - [`command`] : l'API publique de mutation (UI, parser, LLM), abaissée en [`op::Op`] inversibles.
 //! - [`history`] : sessions, transactions, gestes, brouillons IA, undo/redo.
+//! - [`render`] : rendu des pages (instances développées, slots remplis), hôtes de rendu.
 //! - [`validate`] : schéma, accessibilité, contraste, responsive, qualité.
 //! - [`migrate`] : chargement des documents sérialisés et migrations de version.
 
@@ -17,6 +18,7 @@ pub mod migrate;
 pub mod node;
 pub mod op;
 pub mod query;
+pub mod render;
 pub mod scope;
 pub mod style;
 pub mod tokens;

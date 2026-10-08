@@ -1,0 +1,12 @@
+---
+source: crates/compiler-web/tests/snapshots.rs
+expression: text
+---
+# Atelier cuisine
+
+Site exporté par [Deep Atelier](https://github.com/CheikhMohamedD/deep_atelier) : Next.js 16.4.0, TypeScript strict, Tailwind CSS v4. Le code ne dépend pas de Deep Atelier.
+
+```sh
+pnpm install
+pnpm dev
+```
