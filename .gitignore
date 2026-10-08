@@ -22,9 +22,11 @@ playwright-report/
 test-results/
 blob-report/
 
-# Supabase
+# Supabase (la clé privée du stack local figure aussi ici : les outils qui ne lisent que le
+# .gitignore racine, comme graphify, l'ignorent ainsi)
 supabase/.branches/
 supabase/.temp/
+supabase/signing_keys.json
 
 # Environnement
 .env
