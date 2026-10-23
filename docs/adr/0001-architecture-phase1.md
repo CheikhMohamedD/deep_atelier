@@ -791,6 +791,27 @@ consignée ici (question → décision, avec la date).
      Phase 1 : le canvas interprète l'IR (§ 10, point 5) ; le vrai `next build` tourne à l'export
      (étape i), dans un job serveur sur le modèle du job CI `export`, et son rapport s'affiche.
 
+**Avant (d)**
+
+11. Breakpoint édité par l'inspecteur quand plusieurs artboards sont affichés.
+    - **Décision (2026-10-23) : l'artboard cliqué, avec un sélecteur.** Le breakpoint actif suit
+      l'artboard où l'élément a été sélectionné (390 → `base`, 640 → `sm`, 768 → `md`, 1024 → `lg`,
+      1280 → `xl`, 1536 → `2xl`) ; un sélecteur de la barre du haut le change aussi, et l'artboard
+      actif est mis en évidence.
+12. Forme du mode Contenu en Phase 1.
+    - **Décision (2026-10-23) : un mode de l'éditeur.** Une bascule restreint l'édition aux
+      textes, images et liens (périmètre `content_only` de l'IR) ; c'est le seul mode d'édition sur
+      téléphone. Pas d'invitation ni de rôle « contenu » : ils arrivent avec la collaboration
+      (Phase 2).
+13. Envoi d'images (stockage des assets) à l'étape (d).
+    - **Décision (2026-10-23) : URL seulement en (d).** L'inspecteur et le mode Contenu proposent
+      une URL d'image ou un espace réservé ; le stockage (Supabase Storage, panneau Assets) arrive
+      à l'étape (i).
+14. Catalogue de polices de l'éditeur de tokens.
+    - **Décision (2026-10-23) : une sélection embarquée** d'environ 60 familles Google Fonts
+      courantes (sans, serif, mono, display) avec leurs graisses, dans `packages/tokens`, sans clé
+      d'API ni appel réseau ; étendue à la demande.
+
 **Avant (f)**
 
 9. Prompt à partir d'une URL (multimodal) en Phase 1 ? Demande un service de capture headless.
