@@ -89,6 +89,7 @@ fn generate(scratch: &Path) -> Result<BTreeMap<PathBuf, String>, String> {
     export(ir::ChangeSet::export_all(&cfg))?;
     export(ir::ChangeUnit::export_all(&cfg))?;
     export(compiler_web::canvas::CanvasPage::export_all(&cfg))?;
+    export(compiler_web::inspect::NodeInspection::export_all(&cfg))?;
     // Contrat de l'API (crates/api/src/schema.rs).
     {
         use api::schema::*;

@@ -13,6 +13,7 @@ pub mod classes;
 pub mod demo;
 pub mod doc;
 pub mod elements;
+pub mod inspect;
 pub mod jsx;
 pub mod module;
 pub mod names;

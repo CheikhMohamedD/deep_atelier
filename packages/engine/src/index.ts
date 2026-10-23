@@ -8,6 +8,7 @@ import type {
   ChangeSet,
   Document,
   Issue,
+  NodeInspection,
   Transaction,
 } from "@deep-atelier/ir-types";
 
@@ -105,6 +106,12 @@ export class Engine {
 
   validate(): Issue[] {
     return JSON.parse(this.#wasm.validate()) as Issue[];
+  }
+
+  /** Inspection d'un nœud (classes produites, propriétés permises, problèmes) ; `null` s'il
+   * n'existe pas. */
+  inspect(node: string): NodeInspection | null {
+    return JSON.parse(this.#wasm.inspect(node)) as NodeInspection | null;
   }
 
   /** Rendu d'une page pour le canvas ; `null` si la page n'existe pas. */

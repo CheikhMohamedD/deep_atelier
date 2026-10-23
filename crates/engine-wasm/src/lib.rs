@@ -6,8 +6,9 @@
 //! `@deep-atelier/ir-types`.
 
 use compiler_web::canvas::canvas_page;
+use compiler_web::inspect::inspect_node;
 use ir::migrate::migrate;
-use ir::{Document, IdGen, PageId, Session, Transaction};
+use ir::{Document, IdGen, NodeId, PageId, Session, Transaction};
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
@@ -124,6 +125,13 @@ impl Core {
         serde_json::to_string(&self.session.validate()).unwrap_or_else(|_| "[]".to_owned())
     }
 
+    /// Inspection d'un nœud pour l'inspecteur (`null` si le nœud n'existe pas).
+    pub fn inspect_json(&self, node: &str) -> String {
+        let node = node.parse::<NodeId>().ok();
+        let inspection = node.and_then(|node| inspect_node(self.session.document(), &node));
+        serde_json::to_string(&inspection).unwrap_or_else(|_| "null".to_owned())
+    }
+
     /// Rendu d'une page pour le canvas (`null` si la page n'existe pas).
     pub fn canvas_page_json(&self, page: &str) -> String {
         let page = page.parse::<PageId>().ok();
@@ -195,6 +203,10 @@ impl Engine {
         self.core.validate_json()
     }
 
+    pub fn inspect(&self, node: &str) -> String {
+        self.core.inspect_json(node)
+    }
+
     #[wasm_bindgen(js_name = canvasPage)]
     pub fn canvas_page(&self, page: &str) -> String {
         self.core.canvas_page_json(page)
@@ -230,6 +242,18 @@ mod tests {
         // Le document sérialisé se relit à l'identique.
         let again = Core::open(&core.document_json(), 1).expect("reopens");
         assert_eq!(again.document(), core.document());
+    }
+
+    #[test]
+    fn inspects_a_node() {
+        let core = landing();
+        let root = core.document().pages[0].root.to_string();
+        let inspection = parse(&core.inspect_json(&root));
+        assert_eq!(inspection["node"], root.as_str());
+        assert_eq!(inspection["owner"]["kind"], "page");
+        assert!(inspection["allowed"].as_array().is_some_and(|a| !a.is_empty()));
+        assert_eq!(parse(&core.inspect_json("n_zzzzzzzzzz")), Value::Null);
+        assert_eq!(parse(&core.inspect_json("not an id")), Value::Null);
     }
 
     #[test]
