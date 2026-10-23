@@ -15,9 +15,11 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { breakpointOf } from "@/lib/editor/breakpoints";
 import { targetOf, type Target } from "@/lib/editor/canvas-index";
 import type { EditorSession } from "@/lib/editor/session";
 import { useEditor } from "@/lib/editor/store";
+import { cn } from "@/lib/utils";
 
 import { Overlay } from "./overlay";
 
@@ -74,6 +76,8 @@ export function Artboard({
   const canvas = useEditor((state) => state.canvas);
   const mode = useEditor((state) => state.mode);
   const frame = useEditor((state) => state.frames[String(width)]);
+  const active = useEditor((state) => state.activeWidth === width);
+  const breakpoint = breakpointOf(width);
 
   // L'iframe a une origine opaque : `*` est la seule cible possible ; seule cette fenêtre la reçoit.
   const post = useCallback((message: HostMessage) => {
@@ -189,13 +193,15 @@ export function Artboard({
       return;
     }
     const additive = event.shiftKey;
-    const target = await targetAt(event, false);
-    useEditor.getState().select(target, additive);
+    // En mode Contenu, un clic vise directement l'élément (texte, image, lien), pas l'instance.
+    const deep = useEditor.getState().editing === "content";
+    const target = await targetAt(event, deep);
+    useEditor.getState().selectIn(width, target, additive);
   }
 
   async function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
     const target = await targetAt(event, true);
-    if (target) useEditor.getState().select(target, false);
+    if (target) useEditor.getState().selectIn(width, target, false);
   }
 
   const height = Math.max(frame?.height ?? 0, MIN_HEIGHT);
@@ -204,21 +210,34 @@ export function Artboard({
     <section
       aria-label={title}
       data-artboard={width}
+      data-active={active || undefined}
       className="absolute top-0"
       style={{ left: x, width }}
     >
       <p
-        className="absolute bottom-full left-0 flex items-center gap-2 whitespace-nowrap pb-1 text-muted-foreground"
+        className={cn(
+          "absolute bottom-full left-0 flex items-center gap-2 whitespace-nowrap pb-1",
+          active ? "font-semibold text-selection" : "text-muted-foreground",
+        )}
         style={{ fontSize: "calc(12px / var(--atl-zoom))" }}
       >
         <span>{width} px</span>
+        <span>{breakpoint}</span>
         {frame?.overflow ? (
           <span className="font-medium text-warning">{t("overflow")}</span>
         ) : null}
       </p>
       <div
         className="relative overflow-hidden bg-white shadow-md"
-        style={{ width, height }}
+        style={{
+          width,
+          height,
+          // Artboard actif : liseré d'épaisseur constante à l'écran.
+          outline: active
+            ? "calc(2px / var(--atl-zoom)) solid var(--selection)"
+            : undefined,
+          outlineOffset: active ? "calc(4px / var(--atl-zoom))" : undefined,
+        }}
       >
         <iframe
           ref={frameRef}

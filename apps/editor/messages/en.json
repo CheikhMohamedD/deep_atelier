@@ -66,7 +66,10 @@
     "reload": "Reload",
     "loadFailed": "Could not open this project.",
     "mode": "Mode",
-    "zoomLevel": "Zoom: {zoom}"
+    "zoomLevel": "Zoom: {zoom}",
+    "breakpoint": "Breakpoint",
+    "breakpointOption": "{name} (≥ {width} px)",
+    "content": "Content"
   },
   "errors": {
     "UNAUTHORIZED": "Your session expired: sign in again.",

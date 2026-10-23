@@ -7,6 +7,8 @@ import type {
   ChangeSet,
   Command,
   Document,
+  NodeInspection,
+  Scope,
   Transaction,
 } from "@deep-atelier/ir-types";
 
@@ -22,15 +24,17 @@ function pagesOf(doc: Document): PageInfo[] {
   return doc.pages.map((page) => ({ id: page.id, name: page.name }));
 }
 
-/** Transaction d'un geste de l'utilisateur. */
+/** Transaction d'un geste de l'utilisateur ; en mode Contenu, le périmètre `content_only` fait
+ * refuser par le moteur tout ce qui n'est pas texte, image ou lien. */
 export function userTransaction(
   label: string,
   commands: Command[],
+  scope: Scope = { content_only: useEditor.getState().editing === "content" },
 ): Transaction {
   return {
     label,
     origin: { kind: "user" },
-    scope: { content_only: false },
+    scope,
     commands,
   };
 }
@@ -83,6 +87,7 @@ export class EditorSession {
       const pageId = doc.pages[0]?.id ?? null;
       useEditor.getState().ready({
         projectName: project.project.name,
+        doc,
         pages: pagesOf(doc),
         pageId,
         canvas: pageId ? engine.canvasPage(pageId) : null,
@@ -105,6 +110,25 @@ export class EditorSession {
     useEditor.getState().setNotice(null);
     this.#changed(result.applied.changes);
     return true;
+  }
+
+  /** Applique des commandes en une transaction utilisateur. */
+  apply(label: string, commands: Command[]): boolean {
+    return this.run(userTransaction(label, commands));
+  }
+
+  /** Geste continu (curseur, glisser) : ses transactions forment une seule entrée d'undo. */
+  beginGesture(label: string): void {
+    this.#engine?.beginGesture(label);
+  }
+
+  endGesture(): void {
+    this.#engine?.endGesture();
+  }
+
+  /** Inspection d'un nœud pour l'inspecteur ; `null` s'il n'existe plus. */
+  inspect(node: string): NodeInspection | null {
+    return this.#engine?.inspect(node) ?? null;
   }
 
   undo(): void {
@@ -166,8 +190,8 @@ export class EditorSession {
     if (!engine) return;
     const state = useEditor.getState();
     let pageId = state.pageId;
-    const pages =
-      changes.pages.length > 0 ? pagesOf(engine.document()) : undefined;
+    const doc = engine.document();
+    const pages = changes.pages.length > 0 ? pagesOf(doc) : undefined;
     if (pages && !pages.some((page) => page.id === pageId)) {
       pageId = pages[0]?.id ?? null;
     }
@@ -178,6 +202,7 @@ export class EditorSession {
     state.setCanvas(
       canvas,
       { canUndo: engine.canUndo, canRedo: engine.canRedo },
+      doc,
       pages,
     );
     this.#autosave?.changed();

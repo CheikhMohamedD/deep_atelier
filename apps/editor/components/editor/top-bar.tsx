@@ -1,10 +1,12 @@
 "use client";
 
+import type { Breakpoint } from "@deep-atelier/ir-types";
 import {
   ArrowLeft,
   Eye,
   Maximize,
   MousePointer2,
+  PenLine,
   Redo2,
   Undo2,
   ZoomIn,
@@ -14,6 +16,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { BREAKPOINTS, MIN_WIDTH } from "@/lib/editor/breakpoints";
 import type { EditorSession } from "@/lib/editor/session";
 import { ALL_WIDTHS, useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
@@ -28,6 +31,8 @@ export function TopBar({ session }: { session: EditorSession }) {
   const canRedo = useEditor((state) => state.canRedo);
   const widths = useEditor((state) => state.widths);
   const mode = useEditor((state) => state.mode);
+  const editing = useEditor((state) => state.editing);
+  const breakpoint = useEditor((state) => state.breakpoint);
   const zoom = useEditor((state) => state.view.zoom);
   const save = useEditor((state) => state.save);
   const store = useEditor.getState;
@@ -107,6 +112,24 @@ export function TopBar({ session }: { session: EditorSession }) {
         })}
       </div>
 
+      <label className="flex items-center gap-1.5 text-sm">
+        <span className="text-muted-foreground">{t("breakpoint")}</span>
+        <select
+          data-testid="breakpoint"
+          className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={breakpoint}
+          onChange={(event) =>
+            store().setBreakpoint(event.target.value as Breakpoint)
+          }
+        >
+          {BREAKPOINTS.map((bp) => (
+            <option key={bp} value={bp}>
+              {t("breakpointOption", { name: bp, width: MIN_WIDTH[bp] })}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="flex items-center">
         <Button
           variant="ghost"
@@ -154,13 +177,29 @@ export function TopBar({ session }: { session: EditorSession }) {
       >
         <Button
           size="sm"
-          variant={mode === "design" ? "default" : "ghost"}
-          aria-pressed={mode === "design"}
+          variant={
+            mode === "design" && editing === "design" ? "default" : "ghost"
+          }
+          aria-pressed={mode === "design" && editing === "design"}
           className="h-8"
-          onClick={() => store().setMode("design")}
+          onClick={() => {
+            store().setEditing("design");
+          }}
         >
           <MousePointer2 aria-hidden="true" />
           {t("design")}
+        </Button>
+        <Button
+          size="sm"
+          variant={
+            mode === "design" && editing === "content" ? "default" : "ghost"
+          }
+          aria-pressed={mode === "design" && editing === "content"}
+          className="h-8"
+          onClick={() => store().setEditing("content")}
+        >
+          <PenLine aria-hidden="true" />
+          {t("content")}
         </Button>
         <Button
           size="sm"

@@ -105,3 +105,32 @@ test("zooms the canvas", async ({ page }) => {
   await zoomReset.click();
   await expect(zoomReset).toHaveText(/100/);
 });
+
+test("edits the breakpoint of the artboard clicked, or the one picked", async ({
+  page,
+}) => {
+  await openLanding(page);
+  const picker = page.getByTestId("breakpoint");
+  await expect(picker).toHaveValue("base");
+  await expect(page.locator('[data-artboard="390"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await clickInCanvas(page, frame(page, 768).locator("h1"));
+  await expect(page.getByTestId("selection-count")).toHaveText(
+    "1 élément sélectionné",
+  );
+  await expect(picker).toHaveValue("md");
+  await expect(page.locator('[data-artboard="768"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+  await expect(page.locator('[data-artboard="390"]')).not.toHaveAttribute(
+    "data-active",
+  );
+  await picker.selectOption("xl");
+  await expect(page.locator('[data-artboard="1280"]')).toHaveAttribute(
+    "data-active",
+    "true",
+  );
+});
