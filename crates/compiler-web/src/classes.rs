@@ -158,6 +158,45 @@ pub fn node_classes(doc: &Document, node: &Node, display: Display) -> Vec<String
     classes
 }
 
+/// Classes que produit une propriété à un breakpoint et dans un état, telles que l'inspecteur de
+/// l'éditeur les affiche. `value` est la valeur déclarée à ce breakpoint, réduite à `base`
+/// ([`ResponsiveValue::at`]). Une propriété à quatre côtés donne la classe de son côté (`pt-4`),
+/// sans le regroupement de l'export (`p-4`). Vide quand l'export n'émet rien : valeur initiale à
+/// `base` hors état, ou état égal au style hors état.
+pub fn prop_classes(
+    doc: &Document,
+    node: &Node,
+    prop: StyleProp,
+    value: &ResponsiveValue,
+    bp: Breakpoint,
+    state: Option<InteractionState>,
+) -> Vec<String> {
+    if bp == Breakpoint::Base {
+        let omitted = match state {
+            None => omitted_at_base(doc, prop, value),
+            Some(_) => node
+                .style
+                .get(prop)
+                .ok()
+                .flatten()
+                .is_some_and(|base| base.at(Breakpoint::Base) == *value),
+        };
+        if omitted {
+            return Vec::new();
+        }
+    }
+    let prefix = format!("{}{}", bp_prefix(bp), state_prefix(state));
+    if let Some((side, _, names)) = side_group(prop) {
+        return side_suffix(value)
+            .map(|suffix| vec![format!("{prefix}{}", join_class(names[side], &suffix))])
+            .unwrap_or_default();
+    }
+    utilities(doc, prop, value)
+        .into_iter()
+        .map(|utility| format!("{prefix}{utility}"))
+        .collect()
+}
+
 /// Classes d'une surcharge de variante (valeurs posées seulement : une variante s'ajoute au
 /// style de base, résolue par `twMerge`).
 pub fn patch_classes(doc: &Document, style: &StylePatch, states: &[(InteractionState, &StatePatch)]) -> Vec<String> {

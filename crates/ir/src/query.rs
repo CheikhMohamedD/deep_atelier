@@ -6,7 +6,7 @@ use crate::document::{Document, Owner};
 use crate::id::{NodeId, TokenName};
 use crate::node::{Node, NodeKind};
 use crate::style::color::ColorRef;
-use crate::style::style::{InteractionState, PropChange, ResponsiveValue, ResponsiveValuePatch, StylePatch};
+use crate::style::style::{InteractionState, PropChange, ResponsiveValue, ResponsiveValuePatch, StylePatch, StyleProp};
 
 /// Références de couleur d'une valeur de style.
 pub fn value_colors(value: &ResponsiveValue) -> Vec<&ColorRef> {
@@ -189,4 +189,18 @@ pub fn owner_label(doc: &Document, owner: &Owner) -> String {
             .component(id)
             .map_or_else(|| id.to_string(), |c| format!("component \"{}\"", c.name)),
     }
+}
+
+/// Propriétés de style qu'un nœud accepte (hors états d'interaction), avec les mêmes règles que la
+/// validation : propriétés propres au type de la primitive, placement selon ses hôtes au rendu.
+/// Liste vide si le nœud n'existe pas.
+pub fn allowed_style_props(doc: &Document, node: &NodeId) -> Vec<StyleProp> {
+    let Some(node) = doc.node(node) else {
+        return Vec::new();
+    };
+    StyleProp::ALL
+        .iter()
+        .copied()
+        .filter(|prop| prop.in_base() && crate::render::style_prop_allowed(doc, *prop, node))
+        .collect()
 }
