@@ -12,3 +12,4 @@ crates/
 docs/
 supabase/
 .claude/
+packages/tokens/src/catalog.ts

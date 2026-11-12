@@ -112,3 +112,72 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 }
+
+/** Téléphone : sous 768 px, l'éditeur n'offre que le mode Contenu et l'aperçu. */
+export function isPhone(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 0) < 768;
+}
+
+/** Sous 1024 px, les panneaux sont des feuilles ouvertes par un bouton de la barre du haut. */
+export function isCompact(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 0) < 1024;
+}
+
+/** Connexion, projet peuplé avec la landing de démonstration, éditeur ouvert. */
+export async function openLanding(page: Page): Promise<string> {
+  await signIn(page);
+  const id = await seedLanding(page.context(), "Landing");
+  await page.goto(`/projects/${id}`);
+  await expect(page.getByRole("heading", { name: "Landing" })).toBeVisible();
+  return id;
+}
+
+export const frame = (page: Page, width: number) =>
+  page.frameLocator(`iframe[title="Canvas, largeur ${width} px"]`);
+
+type CanvasLocator = ReturnType<ReturnType<typeof frame>["locator"]>;
+
+/** Clique au centre d'un élément du canvas (sur la vitre de l'éditeur, au-dessus de l'iframe). */
+export async function clickInCanvas(
+  page: Page,
+  locator: CanvasLocator,
+  modifiers: "Shift"[] = [],
+): Promise<void> {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("élément invisible");
+  for (const key of modifiers) await page.keyboard.down(key);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  for (const key of modifiers) await page.keyboard.up(key);
+}
+
+/** Ouvre le panneau gauche sur un onglet (une feuille sous 1024 px). */
+export async function openLeftPanel(
+  page: Page,
+  tab: "Calques" | "Pages" | "Tokens",
+): Promise<void> {
+  const panel = page.locator('[data-panel="left"]');
+  if (isCompact(page) && !(await panel.isVisible())) {
+    await page
+      .getByRole("button", { name: "Calques, pages et tokens" })
+      .click();
+  }
+  await page.getByRole("tab", { name: tab }).click();
+  await expect(panel).toBeVisible();
+}
+
+/** Ouvre l'inspecteur (une feuille sous 1024 px) et le renvoie. */
+export async function openInspector(page: Page, name = "Inspecteur") {
+  const panel = page.locator('[data-panel="inspector"]');
+  if (isCompact(page) && !(await panel.isVisible())) {
+    await page.getByRole("button", { name, exact: true }).click();
+  }
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** Ferme la feuille ouverte sous 1024 px, pour retrouver tout le canvas. */
+export async function closeSheet(page: Page): Promise<void> {
+  if (!isCompact(page)) return;
+  const close = page.getByRole("button", { name: /^Fermer : / });
+  if (await close.first().isVisible()) await close.first().click();
+}

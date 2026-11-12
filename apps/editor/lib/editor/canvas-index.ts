@@ -86,8 +86,11 @@ export function select(
     : [...selection, target];
 }
 
-/** Sélection gardée après un rendu : les occurrences qui existent encore. */
-export function prune(selection: Target[], index: CanvasIndex): Target[] {
-  const kept = selection.filter((t) => index.has(t.key));
+/** Sélection gardée après un rendu : les cibles que `keep` reconnaît encore. */
+export function prune(
+  selection: Target[],
+  keep: (target: Target) => boolean,
+): Target[] {
+  const kept = selection.filter(keep);
   return kept.length === selection.length ? selection : kept;
 }

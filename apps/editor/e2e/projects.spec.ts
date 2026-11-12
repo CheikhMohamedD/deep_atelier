@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { expectNoHorizontalScroll, signIn } from "./helpers";
+import { expectNoHorizontalScroll, isPhone, signIn } from "./helpers";
 
 test("creates, opens and deletes a project", async ({ page }) => {
   await signIn(page);
@@ -14,7 +14,10 @@ test("creates, opens and deletes a project", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Site de bout en bout" }),
   ).toBeVisible();
-  await expect(page.locator("[data-artboard]")).toHaveCount(3);
+  // Téléphone : un seul artboard de 390 px (mode Contenu) ; ailleurs, 390, 768 et 1280.
+  await expect(page.locator("[data-artboard]")).toHaveCount(
+    isPhone(page) ? 1 : 3,
+  );
   await expectNoHorizontalScroll(page);
 
   await page.getByRole("link", { name: "Projets" }).click();

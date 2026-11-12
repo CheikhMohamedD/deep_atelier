@@ -54,7 +54,7 @@ export function Viewport({ session }: { session: EditorSession }) {
     <div
       ref={ref}
       data-testid="viewport"
-      className="relative min-h-0 flex-1 touch-none overflow-hidden bg-canvas"
+      className="relative min-h-0 min-w-0 flex-1 touch-none overflow-hidden bg-canvas"
     >
       <div className="absolute left-0 top-0 origin-top-left" style={world}>
         {layoutArtboards(widths).map(({ width, x }) => (

@@ -1258,6 +1258,121 @@ l'éditeur). L'arborescence suit le § 2, sauf : `packages/tokens`, `packages/ai
     chargé une fois par iframe ; le module wasm n'est pas passé par `wasm-opt`.
 17. À 390 px, l'éditeur s'utilise sans défilement horizontal, mais l'ajustement montre les trois
     artboards à 13 % : sur téléphone, mieux vaut n'afficher que 390.
-18. Pas encore de panneau des calques, d'inspecteur ni de création de pages (étape d), ni de
-    glisser-déposer (étape e). La connexion GitHub n'est pas couverte par les tests de bout en
+18. Pas encore de panneau des calques, d'inspecteur ni de création de pages (livrés à l'étape d,
+    § 18), ni de glisser-déposer (étape e). La connexion GitHub n'est pas couverte par les tests de bout en
     bout.
+
+---
+
+## 18. Étape (d) : calques, inspecteur par breakpoint, pages, tokens, mode Contenu (2026-11-12)
+
+Décisions « Avant (d) » : § 12, questions 11 à 14. La PR #8 n'a livré que l'inspection côté moteur
+(`Engine.inspect`) ; l'interface de l'étape arrive dans une seconde PR.
+
+**Socle**
+
+1. L'état de l'éditeur garde le document de l'IR (relu dans le moteur après chaque transaction,
+   undo ou redo) : les panneaux le lisent, aucun ne le modifie. Toute action passe par
+   `EditorSession.edit`, qui construit une transaction de l'utilisateur dans le périmètre du mode
+   courant (`content_only` en mode Contenu). Les choix de couleur au sélecteur natif sont un geste
+   (`beginGesture` / `endGesture`) : une seule entrée d'undo par choix.
+2. Les champs de saisie gardent un brouillon local et ne valident qu'à la sortie du champ ou sur
+   Entrée (⌘/Ctrl + Entrée pour une zone de texte) ; Échap abandonne. Une valeur refusée par le
+   moteur n'est pas gardée : le champ revient à celle du document et la barre d'état explique le
+   refus (codes traduits : `IN_USE`, `OUT_OF_SCOPE`…).
+3. Mise en page : à partir de 1024 px, panneau gauche (onglets Calques, Pages, Tokens) et
+   inspecteur en colonnes de 288 px autour du canvas ; en dessous, ce sont des feuilles ouvertes
+   par deux boutons de la barre du haut, une à la fois, par-dessus le bas du canvas (choix de
+   l'implémentation : la spec ne fixe que l'usage sur tablette ≥ 1024 px).
+
+**Breakpoint actif** (question 11)
+
+4. Cliquer dans un artboard règle le breakpoint édité (390 → `base`, 640 → `sm`, 768 → `md`,
+   1024 → `lg`, 1280 → `xl`, 1536 → `2xl`) ; le sélecteur « Breakpoint édité » le change aussi et
+   affiche l'artboard s'il était masqué. L'artboard actif porte un liseré et son libellé est mis
+   en évidence.
+
+**Calques**
+
+5. Arbre du layout de la page, puis de la page. Libellé : nom du calque, sinon un extrait du
+   contenu, sinon le type (rôle sémantique d'un conteneur, « Titre » pour un heading). Choisir un
+   calque sélectionne son premier rendu dans le canvas (l'élément le plus haut pour une instance) ;
+   un nœud sans rendu reste sélectionnable. Renommage (double-clic, F2), monter/descendre parmi
+   les frères (`move_node`), verrou, masquage (`visibility: { base: false }` ; une visibilité
+   par breakpoint se règle dans l'inspecteur). À partir de 1024 px, les flèches n'apparaissent
+   qu'au survol, au focus ou sur le calque sélectionné.
+6. Un calque verrouillé, ou dont un ancêtre l'est, ne se supprime pas et ne se prend pas au clic
+   dans le canvas (le clic remonte au premier ancêtre libre) ; il se sélectionne dans les calques,
+   et l'inspecteur le montre en lecture seule.
+
+**Inspecteur**
+
+7. Champs de contenu (texte, image, lien, bouton, icône, champ de formulaire, rôle d'un
+   conteneur), calque et accessibilité (nom, ancre, nom accessible, masquage des lecteurs
+   d'écran), visibilité au breakpoint actif, puis le style en neuf groupes : disposition, dans son
+   parent, espacement, taille, position, typographie, fond, bordure, effets. Seules les propriétés
+   que le moteur permet sur le nœud (`NodeInspection.allowed`) sont affichées.
+8. Chaque propriété s'édite au breakpoint actif (`set_style` avec `{ [bp]: valeur }`) et affiche :
+   une pastille « défini en md » si la valeur est posée à ce breakpoint, sinon « hérité de base » ;
+   « surchargé en lg, xl » si des breakpoints plus larges la remplacent ; la classe Tailwind
+   produite (par le moteur, `NodeInspection.classes`). « Réinitialiser à l'héritage » efface la
+   surcharge ; à `base`, le bouton retire la propriété. Poser une surcharge sur une propriété
+   absente laisse le moteur poser la base neutre (`command/neutral.rs`) : le rendu mobile ne
+   change pas.
+9. Valeurs : listes fermées pour les crans de l'IR, liste à suggestions et saisie libre pour les
+   dimensions (`320px`, `container.md`…) et les couleurs (tokens, mots-clés, palette `slate-900`,
+   opacité `/80`) ; le moteur valide. Un test vérifie que chaque valeur proposée est acceptée.
+10. Pas encore d'édition des états d'interaction (hover, focus, active), ni d'inspection d'une
+    sélection multiple.
+
+**Pages, routes, layouts, SEO**
+
+11. Onglet Pages : liste (nom et route), création (route proposée d'après le nom :
+    « À propos » → `/a-propos`), page affichée à la création. Réglages de la page : nom, route
+    saisie comme un chemin (`/blog/[slug]` : un segment entre crochets est un paramètre ; une
+    saisie mal formée est signalée et non appliquée), layout partagé, titre et description SEO,
+    suppression (confirmée, annulable). Layouts : création, renommage, suppression (refusée par le
+    moteur tant qu'une page l'utilise). Réglages du site : nom, langue.
+
+**Tokens** (question 14)
+
+12. Couleurs : valeur claire et valeur sombre facultative, par sélecteur natif ou saisie
+    hexadécimale ; ajout (nom en kebab-case) et suppression (refusée si le token est utilisé).
+    Polices : piles système ou familles du catalogue, avec leurs graisses. Unité d'espacement,
+    rayons, ombres (couches x, y, flou, étendue, couleur, interne).
+13. `packages/tokens` embarque le catalogue : 66 familles Google Fonts (32 sans, 16 serif, 8 mono,
+    10 display). Leurs graisses ont été vérifiées auprès de Google Fonts (une graisse absente fait
+    échouer la feuille de style entière) par `scripts/probe-fonts.mjs`, qui régénère
+    `src/catalog.ts` ; aucun appel réseau à l'exécution. Le token créé ne garde que des graisses
+    que la famille propose (400 et 700 par défaut).
+
+**Mode Contenu et téléphone** (question 12)
+
+14. Trois modes : Design, Contenu, Aperçu. En mode Contenu, un clic choisit l'élément de contenu
+    le plus proche (texte, image, lien, bouton à libellé) et ouvre ses champs ; les transactions
+    portent `content_only`, que le moteur fait respecter (style, structure et rôles refusés).
+    Pas de panneau gauche ni de suppression. Un texte mis en forme s'édite segment par segment
+    (l'éditeur de texte riche n'est pas dans l'étape).
+15. Sous 768 px, l'éditeur ne propose que Contenu et Aperçu, sur un seul artboard de 390 px.
+16. Images (question 13) : URL ou espace réservé. À la saisie d'une URL, l'éditeur charge l'image
+    pour lire ses dimensions intrinsèques (exigées par l'IR) ; une image illisible est refusée.
+
+**Tests**
+
+17. vitest (27) : correspondance largeur ⇄ breakpoint et résolution mobile-first, routes, arbre
+    des calques (libellés, visibilité, verrou, cibles), périmètre du mode Contenu, couverture des
+    propriétés et valeurs de l'inspecteur par le moteur, catalogue de polices (paquet tokens, 3).
+18. Playwright aux largeurs 390, 768 et 1280 (36 cas dont 6 ignorés sur téléphone, où l'édition
+    complète n'existe pas) : breakpoint de l'artboard cliqué, surcharge `md` (classe, rendu par
+    largeur, héritage, réinitialisation), calques (sélection, renommage, masquage, ordre, verrou),
+    pages (création, route dynamique, route refusée, SEO, layout, relecture après rechargement),
+    tokens (re-thème du canvas, refus de suppression, feuille Google Fonts), mode Contenu (texte,
+    lien, texte alternatif, suppression impossible, aperçu), absence de défilement horizontal.
+
+**Limites connues**
+
+19. Réordonnancement par boutons seulement : le glisser-déposer arrive à l'étape (e).
+20. Ni états d'interaction, ni sélection multiple dans l'inspecteur ; le texte riche s'édite par
+    segments. Les props et variantes d'une instance de composant ne s'éditent pas encore.
+21. Les dimensions d'une image distante sont lues par le navigateur de l'éditeur : une image qui
+    refuse le chargement depuis une autre origine ne peut pas être posée par URL.

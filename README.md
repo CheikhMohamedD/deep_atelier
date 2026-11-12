@@ -65,6 +65,8 @@ Ouvrir http://localhost:3000 et saisir une adresse e-mail : le lien de connexion
 
 - Port 3000 occupé : `PORT=3100 pnpm --filter @deep-atelier/editor dev`, et l'API doit autoriser
   cette origine : `CORS_ORIGINS=http://localhost:3100 cargo run -p deep-atelier-api`.
+- Port 3001 occupé : `API_BIND=127.0.0.1:3011` pour l'API, `NEXT_PUBLIC_API_URL=http://127.0.0.1:3011`
+  pour l'éditeur et `E2E_API_URL=http://127.0.0.1:3011` pour Playwright.
 - Après un changement du Rust (`crates/`) ou du runtime du canvas, relancer la commande 3 ; après un
   changement des types Rust exportés, `cargo xtask codegen`.
 - Ne pas lancer `pnpm build` pendant que l'éditeur tourne en `dev` : Next.js 15 partage `.next`
@@ -74,8 +76,13 @@ Tests de l'éditeur : vitest, puis Playwright aux largeurs 390, 768 et 1280 (ser
 
 ```sh
 pnpm test
+pnpm --filter @deep-atelier/editor exec playwright install chromium   # une fois par version
 E2E_BASE_URL=http://localhost:3000 pnpm --filter @deep-atelier/editor e2e
 ```
+
+Le catalogue de polices (`packages/tokens/src/catalog.ts`) se régénère avec
+`pnpm --filter @deep-atelier/tokens fonts` après un changement de `scripts/families.json`
+(réseau requis : les graisses sont vérifiées auprès de Google Fonts).
 
 Vérifier un projet exporté comme la CI (job `export`) : la landing de démonstration est écrite dans
 `$OUT`, construite, servie, puis contrôlée (viewports, menu, Lighthouse mobile) avec Chrome.
@@ -107,7 +114,7 @@ CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 - [x] (b) `crates/compiler-web` : IR → TSX + Tailwind
 - [x] (b2) `crates/api` + Supabase : auth, projets, sauvegarde, versions
 - [x] (c) `crates/engine-wasm` + canvas en iframe
-- [ ] (d) Calques + inspecteur par breakpoint
+- [x] (d) Calques, inspecteur par breakpoint, pages, tokens, mode Contenu
 - [ ] (e) Glisser-déposer depuis la bibliothèque
 - [ ] (f) Couche IA : prompt, outils, validation, aperçu fantôme
 - [ ] (g) Panneau code Monaco

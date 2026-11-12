@@ -5,6 +5,9 @@ import {
   Eye,
   Maximize,
   MousePointer2,
+  PanelLeft,
+  PanelRight,
+  PencilLine,
   Redo2,
   Undo2,
   ZoomIn,
@@ -13,16 +16,34 @@ import {
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
+import type { Breakpoint } from "@deep-atelier/ir-types";
+
 import { Button, buttonVariants } from "@/components/ui/button";
+import { BREAKPOINTS, widthOf } from "@/lib/editor/breakpoints";
 import type { EditorSession } from "@/lib/editor/session";
-import { ALL_WIDTHS, useEditor } from "@/lib/editor/store";
+import { ALL_WIDTHS, useEditor, type EditorMode } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 
-export function TopBar({ session }: { session: EditorSession }) {
+const MODE_ICONS = {
+  design: MousePointer2,
+  content: PencilLine,
+  preview: Eye,
+} as const;
+
+export function TopBar({
+  session,
+  phone,
+}: {
+  session: EditorSession;
+  /** Téléphone : mode Contenu et aperçu seulement, un seul artboard. */
+  phone: boolean;
+}) {
   const t = useTranslations("editor");
   const format = useFormatter();
   const projectName = useEditor((state) => state.projectName);
-  const pages = useEditor((state) => state.pages);
+  const pages = useEditor((state) => state.doc?.pages) ?? [];
+  const breakpoint = useEditor((state) => state.breakpoint);
+  const sheet = useEditor((state) => state.sheet);
   const pageId = useEditor((state) => state.pageId);
   const canUndo = useEditor((state) => state.canUndo);
   const canRedo = useEditor((state) => state.canRedo);
@@ -31,6 +52,9 @@ export function TopBar({ session }: { session: EditorSession }) {
   const zoom = useEditor((state) => state.view.zoom);
   const save = useEditor((state) => state.save);
   const store = useEditor.getState;
+  const modes: EditorMode[] = phone
+    ? ["content", "preview"]
+    : ["design", "content", "preview"];
 
   return (
     <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border bg-background px-2 py-1.5">
@@ -85,27 +109,53 @@ export function TopBar({ session }: { session: EditorSession }) {
         </Button>
       </div>
 
-      <div
-        role="group"
-        aria-label={t("widths")}
-        className="flex max-w-full items-center gap-1 overflow-x-auto"
-      >
-        {ALL_WIDTHS.map((width) => {
-          const shown = widths.includes(width);
-          return (
-            <Button
-              key={width}
-              size="sm"
-              variant={shown ? "default" : "outline"}
-              aria-pressed={shown}
-              className="h-8 px-2 tabular-nums"
-              onClick={() => store().toggleWidth(width)}
+      {phone ? null : (
+        <>
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="hidden text-muted-foreground xl:inline">
+              {t("breakpoint")}
+            </span>
+            <select
+              aria-label={t("breakpoint")}
+              className="h-9 rounded-md border border-border bg-background px-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={breakpoint}
+              onChange={(event) =>
+                store().setBreakpoint(event.target.value as Breakpoint)
+              }
             >
-              {width}
-            </Button>
-          );
-        })}
-      </div>
+              {BREAKPOINTS.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {t("breakpointOption", {
+                    breakpoint: candidate,
+                    width: widthOf(candidate),
+                  })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div
+            role="group"
+            aria-label={t("widths")}
+            className="flex max-w-full items-center gap-1 overflow-x-auto"
+          >
+            {ALL_WIDTHS.map((width) => {
+              const shown = widths.includes(width);
+              return (
+                <Button
+                  key={width}
+                  size="sm"
+                  variant={shown ? "default" : "outline"}
+                  aria-pressed={shown}
+                  className="h-8 px-2 tabular-nums"
+                  onClick={() => store().toggleWidth(width)}
+                >
+                  {width}
+                </Button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <div className="flex items-center">
         <Button
@@ -152,27 +202,56 @@ export function TopBar({ session }: { session: EditorSession }) {
         aria-label={t("mode")}
         className="flex items-center gap-0.5 rounded-md border border-border p-0.5"
       >
-        <Button
-          size="sm"
-          variant={mode === "design" ? "default" : "ghost"}
-          aria-pressed={mode === "design"}
-          className="h-8"
-          onClick={() => store().setMode("design")}
-        >
-          <MousePointer2 aria-hidden="true" />
-          {t("design")}
-        </Button>
-        <Button
-          size="sm"
-          variant={mode === "preview" ? "default" : "ghost"}
-          aria-pressed={mode === "preview"}
-          className="h-8"
-          onClick={() => store().setMode("preview")}
-        >
-          <Eye aria-hidden="true" />
-          {t("preview")}
-        </Button>
+        {modes.map((candidate) => {
+          const Icon = MODE_ICONS[candidate];
+          return (
+            <Button
+              key={candidate}
+              size="sm"
+              variant={mode === candidate ? "default" : "ghost"}
+              aria-pressed={mode === candidate}
+              className="h-8 px-2.5"
+              onClick={() => store().setMode(candidate)}
+            >
+              <Icon aria-hidden="true" />
+              {t(candidate)}
+            </Button>
+          );
+        })}
       </div>
+
+      {mode === "preview" ? null : (
+        <div className="flex items-center lg:hidden">
+          {mode === "design" && !phone ? (
+            <Button
+              variant={sheet === "left" ? "default" : "ghost"}
+              size="icon-sm"
+              aria-pressed={sheet === "left"}
+              aria-label={t("panels.left")}
+              title={t("panels.left")}
+              onClick={() => store().setSheet(sheet === "left" ? null : "left")}
+            >
+              <PanelLeft aria-hidden="true" />
+            </Button>
+          ) : null}
+          <Button
+            variant={sheet === "inspector" ? "default" : "ghost"}
+            size="icon-sm"
+            aria-pressed={sheet === "inspector"}
+            aria-label={t(
+              mode === "content" ? "panels.content" : "panels.inspector",
+            )}
+            title={t(
+              mode === "content" ? "panels.content" : "panels.inspector",
+            )}
+            onClick={() =>
+              store().setSheet(sheet === "inspector" ? null : "inspector")
+            }
+          >
+            <PanelRight aria-hidden="true" />
+          </Button>
+        </div>
+      )}
 
       <p
         role="status"
