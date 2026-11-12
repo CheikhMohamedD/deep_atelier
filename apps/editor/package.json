@@ -19,6 +19,7 @@
     "@deep-atelier/canvas-runtime": "workspace:*",
     "@deep-atelier/engine": "workspace:*",
     "@deep-atelier/ir-types": "workspace:*",
+    "@deep-atelier/tokens": "workspace:*",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "class-variance-authority": "0.7.1",

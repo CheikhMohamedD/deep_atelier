@@ -1,34 +1,18 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { expectNoHorizontalScroll, seedLanding, signIn } from "./helpers";
-
-async function openLanding(page: Page): Promise<string> {
-  await signIn(page);
-  const id = await seedLanding(page.context(), "Landing");
-  await page.goto(`/projects/${id}`);
-  await expect(page.getByRole("heading", { name: "Landing" })).toBeVisible();
-  return id;
-}
-
-const frame = (page: Page, width: number) =>
-  page.frameLocator(`iframe[title="Canvas, largeur ${width} px"]`);
-
-/** Clique au centre d'un élément du canvas (sur la vitre de l'éditeur, au-dessus de l'iframe). */
-async function clickInCanvas(
-  page: Page,
-  locator: ReturnType<ReturnType<typeof frame>["locator"]>,
-  modifiers: "Shift"[] = [],
-) {
-  const box = await locator.boundingBox();
-  if (!box) throw new Error("élément invisible");
-  for (const key of modifiers) await page.keyboard.down(key);
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  for (const key of modifiers) await page.keyboard.up(key);
-}
+import {
+  clickInCanvas,
+  expectNoHorizontalScroll,
+  frame,
+  isPhone,
+  openLanding,
+} from "./helpers";
 
 test("renders the page in every artboard and selects elements", async ({
   page,
 }) => {
+  // Sur téléphone, l'éditeur n'a que le mode Contenu et l'aperçu (voir content.spec.ts).
+  test.skip(isPhone(page), "édition complète : tablette et bureau");
   await openLanding(page);
   await expect(page.locator("[data-artboard]")).toHaveCount(3);
   for (const width of [390, 768, 1280]) {
@@ -63,6 +47,7 @@ test("renders the page in every artboard and selects elements", async ({
 });
 
 test("deletes, undoes, redoes and saves the document", async ({ page }) => {
+  test.skip(isPhone(page), "édition complète : tablette et bureau");
   await openLanding(page);
   const canvas = frame(page, 1280);
   await clickInCanvas(page, canvas.locator("h1"));

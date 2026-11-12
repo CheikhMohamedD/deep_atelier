@@ -10,6 +10,7 @@ const config: NextConfig = {
     "@deep-atelier/engine",
     "@deep-atelier/ir-types",
     "@deep-atelier/canvas-protocol",
+    "@deep-atelier/tokens",
   ],
 };
 

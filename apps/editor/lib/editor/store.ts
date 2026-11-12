@@ -1,13 +1,14 @@
 // État de l'éditeur (Zustand + Immer). Le moteur WebAssembly reste hors de l'état : la session
 // (session.ts) le pilote et y reporte ce que l'interface affiche.
 
-import type { CanvasMode, Rect } from "@deep-atelier/canvas-protocol";
-import type { CanvasPage } from "@deep-atelier/ir-types";
+import type { Rect } from "@deep-atelier/canvas-protocol";
+import type { Breakpoint, CanvasPage, Document } from "@deep-atelier/ir-types";
 import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import type { SaveStatus } from "./autosave";
+import { breakpointOfWidth, widthOf } from "./breakpoints";
 import {
   indexCanvas,
   prune,
@@ -15,6 +16,7 @@ import {
   type CanvasIndex,
   type Target,
 } from "./canvas-index";
+import { isDetached } from "./tree";
 import {
   fitWidth,
   panBy,
@@ -36,20 +38,35 @@ export type FrameState = {
   rects: Record<string, Rect>;
 };
 
-export type PageInfo = { id: string; name: string };
+/**
+ * Mode de l'éditeur. Design : édition complète. Contenu : textes, images et liens seulement
+ * (périmètre `content_only` de l'IR). Aperçu : le site est interactif, rien ne s'édite.
+ */
+export type EditorMode = "design" | "content" | "preview";
+
+/** Onglet du panneau gauche. */
+export type LeftTab = "layers" | "pages" | "tokens";
+
+/** Panneau ouvert en feuille sous 1024 px (au-delà, les deux panneaux sont des colonnes). */
+export type Sheet = "left" | "inspector" | null;
 
 type Data = {
   phase: "loading" | "ready" | "failed";
   /** Code d'erreur de l'ouverture. */
   failure: string | null;
   projectName: string;
-  pages: PageInfo[];
+  /** Document de l'IR, relu dans le moteur après chaque changement. */
+  doc: Document | null;
   pageId: string | null;
   canvas: CanvasPage | null;
   index: CanvasIndex;
   selection: Target[];
   hover: Target | null;
-  mode: CanvasMode;
+  mode: EditorMode;
+  /** Breakpoint édité par l'inspecteur (ADR 0001 § 12, question 11). */
+  breakpoint: Breakpoint;
+  leftTab: LeftTab;
+  sheet: Sheet;
   widths: number[];
   frames: Record<string, FrameState>;
   view: View;
@@ -68,20 +85,28 @@ type Actions = {
   failed: (code: string) => void;
   ready: (data: {
     projectName: string;
-    pages: PageInfo[];
+    doc: Document;
     pageId: string | null;
     canvas: CanvasPage | null;
   }) => void;
-  setCanvas: (
+  setDocument: (
+    doc: Document,
     canvas: CanvasPage | null,
     history: { canUndo: boolean; canRedo: boolean },
-    pages?: PageInfo[],
   ) => void;
-  setPage: (pageId: string, canvas: CanvasPage | null) => void;
+  setPage: (pageId: string | null, canvas: CanvasPage | null) => void;
   setHover: (target: Target | null) => void;
   select: (target: Target | null, additive: boolean) => void;
   clearSelection: () => void;
-  setMode: (mode: CanvasMode) => void;
+  setMode: (mode: EditorMode) => void;
+  /** Change le breakpoint édité ; son artboard est affiché s'il ne l'était pas. */
+  setBreakpoint: (breakpoint: Breakpoint) => void;
+  /** Le breakpoint suit l'artboard où l'on travaille. */
+  activateWidth: (width: number) => void;
+  /** Un seul artboard (téléphone). */
+  showOnly: (width: number) => void;
+  setLeftTab: (tab: LeftTab) => void;
+  setSheet: (sheet: Sheet) => void;
   toggleWidth: (width: number) => void;
   setFrameLayout: (width: number, height: number, overflow: boolean) => void;
   setFrameRects: (width: number, rects: Record<string, Rect>) => void;
@@ -101,13 +126,16 @@ const initial = (): Data => ({
   phase: "loading",
   failure: null,
   projectName: "",
-  pages: [],
+  doc: null,
   pageId: null,
   canvas: null,
   index: new Map(),
   selection: [],
   hover: null,
   mode: "design",
+  breakpoint: "base",
+  leftTab: "layers",
+  sheet: null,
   widths: [...DEFAULT_WIDTHS],
   frames: {},
   view: { zoom: 1, x: 32, y: 32 },
@@ -134,26 +162,31 @@ export const useEditor = create<EditorState>()(
         state.phase = "failed";
         state.failure = code;
       }),
-    ready: ({ projectName, pages, pageId, canvas }) =>
+    ready: ({ projectName, doc, pageId, canvas }) =>
       set((state) => {
         state.phase = "ready";
         state.failure = null;
         state.projectName = projectName;
-        state.pages = pages;
+        state.doc = doc;
         state.pageId = pageId;
         state.canvas = canvas;
         state.index = indexCanvas(canvas);
       }),
-    setCanvas: (canvas, history, pages) =>
+    setDocument: (doc, canvas, history) =>
       set((state) => {
+        state.doc = doc;
         state.canvas = canvas;
         state.index = indexCanvas(canvas);
-        state.selection = prune(state.selection, state.index);
+        // Une cible sans rendu (choisie dans les calques) reste tant que son nœud existe.
+        state.selection = prune(state.selection, (target) =>
+          isDetached(target.key)
+            ? doc.nodes[target.node] !== undefined
+            : state.index.has(target.key),
+        );
         if (state.hover && !state.index.has(state.hover.key))
           state.hover = null;
         state.canUndo = history.canUndo;
         state.canRedo = history.canRedo;
-        if (pages) state.pages = pages;
       }),
     setPage: (pageId, canvas) =>
       set((state) => {
@@ -178,8 +211,40 @@ export const useEditor = create<EditorState>()(
       }),
     setMode: (mode) =>
       set((state) => {
+        if (state.mode === mode) return;
         state.mode = mode;
         state.hover = null;
+        // Les cibles ne sont pas les mêmes d'un mode à l'autre (instance, élément de contenu).
+        state.selection = [];
+      }),
+    setBreakpoint: (breakpoint) =>
+      set((state) => {
+        state.breakpoint = breakpoint;
+        const width = widthOf(breakpoint);
+        if (!state.widths.includes(width)) {
+          state.widths = [...state.widths, width].sort((a, b) => a - b);
+        }
+      }),
+    activateWidth: (width) =>
+      set((state) => {
+        state.breakpoint = breakpointOfWidth(width);
+      }),
+    showOnly: (width) =>
+      set((state) => {
+        if (state.widths.length === 1 && state.widths[0] === width) return;
+        state.widths = [width];
+        state.breakpoint = breakpointOfWidth(width);
+        if (state.viewport.width > 0) {
+          state.view = fitWidth(state.viewport, state.widths);
+        }
+      }),
+    setLeftTab: (tab) =>
+      set((state) => {
+        state.leftTab = tab;
+      }),
+    setSheet: (sheet) =>
+      set((state) => {
+        state.sheet = sheet;
       }),
     toggleWidth: (width) =>
       set((state) => {
@@ -189,6 +254,10 @@ export const useEditor = create<EditorState>()(
         state.widths = on
           ? state.widths.filter((w) => w !== width)
           : [...state.widths, width].sort((a, b) => a - b);
+        // Le breakpoint édité reste celui d'un artboard affiché.
+        if (on && widthOf(state.breakpoint) === width) {
+          state.breakpoint = breakpointOfWidth(state.widths[0] ?? 390);
+        }
       }),
     setFrameLayout: (width, height, overflow) =>
       set((state) => {

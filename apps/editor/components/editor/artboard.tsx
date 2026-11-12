@@ -15,9 +15,16 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import { targetOf, type Target } from "@/lib/editor/canvas-index";
+import { breakpointOfWidth } from "@/lib/editor/breakpoints";
+import {
+  targetOf,
+  type CanvasIndex,
+  type Target,
+} from "@/lib/editor/canvas-index";
 import type { EditorSession } from "@/lib/editor/session";
 import { useEditor } from "@/lib/editor/store";
+import { isContentNode, isLocked } from "@/lib/editor/tree";
+import { cn } from "@/lib/utils";
 
 import { Overlay } from "./overlay";
 
@@ -54,6 +61,38 @@ class HitRequests {
 
 type ClientPoint = { clientX: number; clientY: number };
 
+/**
+ * Cible d'un clic selon le mode. Contenu : l'élément de contenu (texte, image, lien, bouton) le
+ * plus proche sous le pointeur. Design : l'instance ou l'élément, ou son premier ancêtre qui
+ * n'est pas verrouillé (un calque verrouillé ne se sélectionne que dans les calques).
+ */
+function resolveTarget(
+  index: CanvasIndex,
+  key: string,
+  deep: boolean,
+): Target | null {
+  const { doc, mode } = useEditor.getState();
+  if (!doc) return null;
+  if (mode === "content") {
+    let element = index.get(key);
+    while (element) {
+      const node = doc.nodes[element.node];
+      if (node && isContentNode(node)) {
+        return { node: element.node, key: element.key };
+      }
+      element =
+        element.parent === undefined ? undefined : index.get(element.parent);
+    }
+    return null;
+  }
+  let target = targetOf(index, key, deep);
+  while (target && isLocked(doc, target.node)) {
+    const parent = index.get(target.key)?.parent;
+    target = parent === undefined ? null : targetOf(index, parent, deep);
+  }
+  return target;
+}
+
 export function Artboard({
   width,
   x,
@@ -73,6 +112,9 @@ export function Artboard({
   const [ready, setReady] = useState(false);
   const canvas = useEditor((state) => state.canvas);
   const mode = useEditor((state) => state.mode);
+  const active = useEditor(
+    (state) => state.breakpoint === breakpointOfWidth(width),
+  );
   const frame = useEditor((state) => state.frames[String(width)]);
 
   // L'iframe a une origine opaque : `*` est la seule cible possible ; seule cette fenêtre la reçoit.
@@ -114,7 +156,9 @@ export function Artboard({
   }, [ready, canvas, post]);
 
   useEffect(() => {
-    if (ready) post({ type: "mode", mode });
+    if (ready) {
+      post({ type: "mode", mode: mode === "preview" ? "preview" : "design" });
+    }
   }, [ready, mode, post]);
 
   useEffect(
@@ -142,7 +186,7 @@ export function Artboard({
     const point = local(event);
     if (!point) return null;
     const key = await hits.current.request(post, point.x, point.y);
-    return key ? targetOf(useEditor.getState().index, key, deep) : null;
+    return key ? resolveTarget(useEditor.getState().index, key, deep) : null;
   };
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -190,7 +234,12 @@ export function Artboard({
     }
     const additive = event.shiftKey;
     const target = await targetAt(event, false);
-    useEditor.getState().select(target, additive);
+    const store = useEditor.getState();
+    // Le breakpoint édité suit l'artboard où l'on travaille (ADR 0001 § 12, question 11).
+    store.activateWidth(width);
+    store.select(target, additive);
+    // Mode Contenu : les champs s'ouvrent dès qu'un élément est choisi (feuille sous 1024 px).
+    if (store.mode === "content" && target) store.setSheet("inspector");
   }
 
   async function onDoubleClick(event: ReactMouseEvent<HTMLDivElement>) {
@@ -204,6 +253,7 @@ export function Artboard({
     <section
       aria-label={title}
       data-artboard={width}
+      data-active={active}
       className="absolute top-0"
       style={{ left: x, width }}
     >
@@ -211,14 +261,24 @@ export function Artboard({
         className="absolute bottom-full left-0 flex items-center gap-2 whitespace-nowrap pb-1 text-muted-foreground"
         style={{ fontSize: "calc(12px / var(--atl-zoom))" }}
       >
-        <span>{width} px</span>
+        <span className={cn(active && "font-semibold text-selection")}>
+          {width} px · {breakpointOfWidth(width)}
+        </span>
         {frame?.overflow ? (
           <span className="font-medium text-warning">{t("overflow")}</span>
         ) : null}
       </p>
       <div
         className="relative overflow-hidden bg-white shadow-md"
-        style={{ width, height }}
+        style={{
+          width,
+          height,
+          // Artboard du breakpoint édité : liseré d'épaisseur constante à l'écran.
+          outline: active
+            ? "calc(2px / var(--atl-zoom)) solid var(--selection)"
+            : undefined,
+          outlineOffset: "calc(2px / var(--atl-zoom))",
+        }}
       >
         <iframe
           ref={frameRef}
@@ -227,7 +287,7 @@ export function Artboard({
           sandbox="allow-scripts"
           className="absolute inset-0 size-full border-0"
         />
-        {mode === "design" ? (
+        {mode !== "preview" ? (
           <>
             <div
               ref={glassRef}

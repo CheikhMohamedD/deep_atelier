@@ -8,7 +8,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EditorSession } from "@/lib/editor/session";
 import { useEditor } from "@/lib/editor/store";
 import { useErrorText } from "@/lib/use-error-text";
+import { PHONE_QUERY, useMediaQuery } from "@/lib/use-media-query";
 
+import { LeftPanel, RightPanel } from "./side-panels";
 import { StatusBar } from "./status-bar";
 import { TopBar } from "./top-bar";
 import { Viewport } from "./viewport";
@@ -41,7 +43,10 @@ function useShortcuts(session: EditorSession) {
         event.preventDefault();
         session.deleteSelection();
       } else if (event.key === "Escape") {
-        useEditor.getState().clearSelection();
+        const store = useEditor.getState();
+        // Échap ferme d'abord la feuille ouverte, puis vide la sélection.
+        if (store.sheet) store.setSheet(null);
+        else store.clearSelection();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -58,6 +63,19 @@ function useUnsavedWarning(session: EditorSession) {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [session]);
+}
+
+/**
+ * Sur téléphone, l'éditeur n'a que le mode Contenu et l'aperçu, sur un seul artboard de 390 px.
+ */
+function usePhoneMode(phone: boolean, ready: boolean) {
+  useEffect(() => {
+    if (!phone || !ready) return;
+    const store = useEditor.getState();
+    if (store.mode === "design") store.setMode("content");
+    if (store.sheet === "left") store.setSheet(null);
+    store.showOnly(390);
+  }, [phone, ready]);
 }
 
 function Centered({ children }: { children: ReactNode }) {
@@ -82,6 +100,9 @@ export function EditorView({ projectId }: { projectId: string }) {
   }, [session]);
   useShortcuts(session);
   useUnsavedWarning(session);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const mode = useEditor((state) => state.mode);
+  usePhoneMode(phone, phase === "ready");
 
   if (phase === "loading") {
     return (
@@ -109,7 +130,7 @@ export function EditorView({ projectId }: { projectId: string }) {
   }
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar session={session} />
+      <TopBar session={session} phone={phone} />
       {save === "conflict" ? (
         <div
           role="alert"
@@ -121,7 +142,11 @@ export function EditorView({ projectId }: { projectId: string }) {
           </Button>
         </div>
       ) : null}
-      <Viewport session={session} />
+      <div className="relative flex min-h-0 flex-1">
+        {mode === "design" && !phone ? <LeftPanel session={session} /> : null}
+        <Viewport session={session} />
+        {mode !== "preview" ? <RightPanel session={session} /> : null}
+      </div>
       <StatusBar />
     </div>
   );

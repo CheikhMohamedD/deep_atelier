@@ -4,33 +4,33 @@
 
 import { Engine, loadEngine } from "@deep-atelier/engine";
 import type {
-  ChangeSet,
   Command,
-  Document,
+  NodeInspection,
   Transaction,
 } from "@deep-atelier/ir-types";
 
 import { ApiError, api, errorCode } from "@/lib/api";
 
 import { Autosave } from "./autosave";
-import { useEditor, type PageInfo } from "./store";
+import { useEditor } from "./store";
+import { isLocked, rootNodes } from "./tree";
 
 /** Module WebAssembly servi par l'éditeur (scripts/prepare-assets.mjs). */
 const WASM_URL = "/engine/engine_bg.wasm";
 
-function pagesOf(doc: Document): PageInfo[] {
-  return doc.pages.map((page) => ({ id: page.id, name: page.name }));
-}
-
-/** Transaction d'un geste de l'utilisateur. */
+/**
+ * Transaction d'un geste de l'utilisateur. En mode Contenu, le périmètre `content_only` de l'IR
+ * refuse tout ce qui n'est pas un texte, une image ou un lien.
+ */
 export function userTransaction(
   label: string,
   commands: Command[],
+  contentOnly = false,
 ): Transaction {
   return {
     label,
     origin: { kind: "user" },
-    scope: { content_only: false },
+    scope: { content_only: contentOnly },
     commands,
   };
 }
@@ -83,7 +83,7 @@ export class EditorSession {
       const pageId = doc.pages[0]?.id ?? null;
       useEditor.getState().ready({
         projectName: project.project.name,
-        pages: pagesOf(doc),
+        doc,
         pageId,
         canvas: pageId ? engine.canvasPage(pageId) : null,
       });
@@ -103,35 +103,69 @@ export class EditorSession {
       return false;
     }
     useEditor.getState().setNotice(null);
-    this.#changed(result.applied.changes);
+    this.#changed();
     return true;
+  }
+
+  /** Applique des commandes dans le périmètre du mode courant. */
+  edit(label: string, commands: Command[]): boolean {
+    if (commands.length === 0) return false;
+    const contentOnly = useEditor.getState().mode === "content";
+    return this.run(userTransaction(label, commands, contentOnly));
+  }
+
+  /**
+   * Crée une page et l'affiche. Passe par `run` pour lire l'identifiant de la page créée.
+   */
+  createPage(command: Extract<Command, { op: "create_page" }>): boolean {
+    const engine = this.#engine;
+    if (!engine) return false;
+    const result = engine.apply(userTransaction("Create page", [command]));
+    if (!result.ok) {
+      useEditor.getState().setNotice(result.error.code);
+      return false;
+    }
+    useEditor.getState().setNotice(null);
+    this.#changed();
+    const created = result.applied.pages[0];
+    if (created) this.setPage(created);
+    return true;
+  }
+
+  /** Geste continu (curseur, sélecteur de couleur) : une seule entrée d'undo. */
+  beginGesture(label: string): void {
+    this.#engine?.beginGesture(label);
+  }
+
+  endGesture(): void {
+    this.#engine?.endGesture();
+  }
+
+  /** Classes produites, propriétés permises et problèmes d'un nœud. */
+  inspect(node: string): NodeInspection | null {
+    return this.#engine?.inspect(node) ?? null;
   }
 
   undo(): void {
     const result = this.#engine?.undo();
-    if (result?.ok && result.changes) this.#changed(result.changes);
+    if (result?.ok && result.changes) this.#changed();
   }
 
   redo(): void {
     const result = this.#engine?.redo();
-    if (result?.ok && result.changes) this.#changed(result.changes);
+    if (result?.ok && result.changes) this.#changed();
   }
 
-  /** Supprime les nœuds sélectionnés (jamais une racine de page ou de layout). */
+  /** Supprime les nœuds sélectionnés (jamais une racine, ni un calque verrouillé). */
   deleteSelection(): void {
-    const engine = this.#engine;
-    const { selection } = useEditor.getState();
-    if (!engine || selection.length === 0) return;
-    const doc = engine.document();
-    const roots = new Set([
-      ...doc.pages.map((page) => page.root),
-      ...doc.layouts.map((layout) => layout.root),
-    ]);
+    const { selection, doc, mode } = useEditor.getState();
+    if (!doc || mode !== "design" || selection.length === 0) return;
+    const roots = rootNodes(doc);
     const nodes = [...new Set(selection.map((target) => target.node))].filter(
-      (node) => !roots.has(node),
+      (node) => !roots.has(node) && !isLocked(doc, node),
     );
     if (nodes.length === 0) return;
-    if (this.run(userTransaction("Delete", [{ op: "delete_nodes", nodes }]))) {
+    if (this.edit("Delete", [{ op: "delete_nodes", nodes }])) {
       useEditor.getState().clearSelection();
     }
   }
@@ -161,25 +195,22 @@ export class EditorSession {
     });
   }
 
-  #changed(changes: ChangeSet): void {
+  /** Relit le document dans le moteur, puis rafraîchit le canvas et lance la sauvegarde. */
+  #changed(): void {
     const engine = this.#engine;
     if (!engine) return;
     const state = useEditor.getState();
+    const doc = engine.document();
     let pageId = state.pageId;
-    const pages =
-      changes.pages.length > 0 ? pagesOf(engine.document()) : undefined;
-    if (pages && !pages.some((page) => page.id === pageId)) {
-      pageId = pages[0]?.id ?? null;
+    if (!doc.pages.some((page) => page.id === pageId)) {
+      pageId = doc.pages[0]?.id ?? null;
     }
     const canvas = pageId ? engine.canvasPage(pageId) : null;
-    if (pageId !== state.pageId && pageId) {
-      state.setPage(pageId, canvas);
-    }
-    state.setCanvas(
-      canvas,
-      { canUndo: engine.canUndo, canRedo: engine.canRedo },
-      pages,
-    );
+    if (pageId !== state.pageId) state.setPage(pageId, canvas);
+    state.setDocument(doc, canvas, {
+      canUndo: engine.canUndo,
+      canRedo: engine.canRedo,
+    });
     this.#autosave?.changed();
   }
 

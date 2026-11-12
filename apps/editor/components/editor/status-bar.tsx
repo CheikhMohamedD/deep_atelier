@@ -13,7 +13,9 @@ export function StatusBar() {
       <span data-testid="selection-count">{t("selection", { count })}</span>
       {notice ? (
         <span role="alert" className="text-destructive">
-          {t("commandFailed", { code: notice })}
+          {t.has(`notices.${notice}` as "notices.IN_USE")
+            ? t(`notices.${notice}` as "notices.IN_USE")
+            : t("commandFailed", { code: notice })}
         </span>
       ) : null}
     </footer>

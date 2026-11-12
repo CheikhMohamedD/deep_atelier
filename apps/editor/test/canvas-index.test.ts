@@ -99,8 +99,8 @@ describe("canvas index", () => {
     expect(select([a], null, false)).toEqual([]);
     expect(select([a], null, true)).toEqual([a]);
     const kept = [a, { node: "n_gone", key: "n_gone" }];
-    expect(prune(kept, index)).toEqual([a]);
+    expect(prune(kept, (t) => index.has(t.key))).toEqual([a]);
     const same = [a];
-    expect(prune(same, index)).toBe(same);
+    expect(prune(same, (t) => index.has(t.key))).toBe(same);
   });
 });
