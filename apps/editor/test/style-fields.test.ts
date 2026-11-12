@@ -13,7 +13,9 @@ import fr from "@/messages/fr.json";
 
 beforeAll(async () => {
   await loadEngine(
-    await readFile(new URL("../public/engine/engine_bg.wasm", import.meta.url)),
+    await readFile(
+      new URL("../../../packages/engine/pkg/engine_bg.wasm", import.meta.url),
+    ),
   );
 });
 

@@ -24,7 +24,9 @@ let ids: Record<string, string>;
 
 beforeAll(async () => {
   await loadEngine(
-    await readFile(new URL("../public/engine/engine_bg.wasm", import.meta.url)),
+    await readFile(
+      new URL("../../../packages/engine/pkg/engine_bg.wasm", import.meta.url),
+    ),
   );
   engine = Engine.blank("Site");
   const root = engine.document().pages[0]?.root ?? "";
