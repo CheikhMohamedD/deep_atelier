@@ -76,7 +76,7 @@
       "pages": "Pages",
       "tokens": "Tokens",
       "inspector": "Inspector",
-      "content": "Content",
+      "content": "Content fields",
       "close": "Close: {name}"
     },
     "notices": {
@@ -379,7 +379,8 @@
         "inset": "Inset",
         "removeLayer": "Remove this layer",
         "addLayer": "Add a layer"
-      }
+      },
+      "picker": "Pick: {label}"
     }
   },
   "errors": {

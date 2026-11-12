@@ -71,7 +71,7 @@ test("deletes, undoes, redoes and saves the document", async ({ page }) => {
 
 test("previews the site: the burger menu opens at 390 px", async ({ page }) => {
   await openLanding(page);
-  await page.getByRole("button", { name: "Aperçu" }).click();
+  await page.getByRole("button", { name: "Aperçu", exact: true }).click();
   await expect(page.locator('[data-testid="glass-390"]')).toHaveCount(0);
   const mobile = frame(page, 390);
   const nav = mobile.locator("nav").first();

@@ -22,11 +22,14 @@ const FIELD =
 export function CommitInput({
   value,
   onCommit,
+  onDone,
   className,
   ...props
 }: Omit<ComponentProps<"input">, "value" | "onChange" | "defaultValue"> & {
   value: string;
   onCommit: (value: string) => void;
+  /** Appelé après la validation (Entrée, sortie du champ) ou l'abandon (Échap). */
+  onDone?: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   // La valeur du document l'emporte dès qu'elle change (undo, autre panneau, commande refusée).
@@ -44,14 +47,17 @@ export function CommitInput({
         commit();
         // Une valeur refusée par le moteur ne reste pas affichée.
         setDraft((current) => (current === value ? current : value));
+        onDone?.();
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           event.preventDefault();
           commit();
+          onDone?.();
         } else if (event.key === "Escape") {
           event.stopPropagation();
           setDraft(value);
+          onDone?.();
         }
       }}
     />

@@ -189,13 +189,7 @@ function LayerRow(props: RowProps) {
                 },
               ])
             }
-            onBlurCapture={() => props.onRename(null)}
-            onKeyDownCapture={(event) => {
-              if (event.key === "Enter" || event.key === "Escape") {
-                // Le champ valide (ou annule) dans son propre gestionnaire, puis se ferme.
-                queueMicrotask(() => props.onRename(null));
-              }
-            }}
+            onDone={() => props.onRename(null)}
           />
         ) : (
           <button
@@ -222,26 +216,37 @@ function LayerRow(props: RowProps) {
         )}
         {editable ? (
           <span className="flex shrink-0 items-center">
-            <button
-              type="button"
-              className={ICON_BUTTON}
-              aria-label={t("moveUp", { name: label })}
-              title={t("moveUp", { name: label })}
-              disabled={position <= 0}
-              onClick={() => move(-1)}
+            {/* À partir de 1024 px, les flèches n'apparaissent qu'au survol, au focus ou sur le
+                calque sélectionné : les noms restent lisibles dans la colonne. Largeur nulle
+                plutôt que `hidden`, pour qu'elles restent atteignables au clavier. */}
+            <span
+              className={cn(
+                "flex items-center",
+                !selected &&
+                  "lg:w-0 lg:overflow-hidden lg:group-focus-within:w-auto lg:group-hover:w-auto",
+              )}
             >
-              <ArrowUp aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className={ICON_BUTTON}
-              aria-label={t("moveDown", { name: label })}
-              title={t("moveDown", { name: label })}
-              disabled={position < 0 || position >= siblings.length - 1}
-              onClick={() => move(1)}
-            >
-              <ArrowDown aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                className={ICON_BUTTON}
+                aria-label={t("moveUp", { name: label })}
+                title={t("moveUp", { name: label })}
+                disabled={position <= 0}
+                onClick={() => move(-1)}
+              >
+                <ArrowUp aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={ICON_BUTTON}
+                aria-label={t("moveDown", { name: label })}
+                title={t("moveDown", { name: label })}
+                disabled={position < 0 || position >= siblings.length - 1}
+                onClick={() => move(1)}
+              >
+                <ArrowDown aria-hidden="true" />
+              </button>
+            </span>
             <button
               type="button"
               className={ICON_BUTTON}

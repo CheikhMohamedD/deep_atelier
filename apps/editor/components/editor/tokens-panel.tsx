@@ -205,11 +205,12 @@ function HexField({
   value: string;
   onChange: (hex: string) => void;
 }) {
+  const t = useTranslations("editor.tokens");
   const picking = useRef(false);
   return (
     <div className="flex min-w-0 items-center gap-1">
       <ColorSwatch
-        label={label}
+        label={t("picker", { label })}
         value={value}
         onPick={(hex) => {
           if (!picking.current) {

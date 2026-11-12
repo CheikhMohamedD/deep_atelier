@@ -205,7 +205,7 @@ test("pages: create, route, SEO, layout, and the document is saved", async ({
   await expect(page.locator('[data-save="saved"]')).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Landing" })).toBeVisible();
-  await page.getByLabel("Page", { exact: true }).selectOption({
+  await page.getByRole("combobox", { name: "Page", exact: true }).selectOption({
     label: "Nos tarifs",
   });
   await openLeftPanel(page, "Pages");
@@ -230,21 +230,25 @@ test("tokens: a color re-themes the canvas, a font comes from the catalogue", as
 
   const primary = panel.locator('[data-token="primary"]');
   await primary
-    .getByRole("textbox", { name: "primary, clair" })
+    .getByRole("textbox", { name: "primary, clair", exact: true })
     .fill("#ff0000");
   await page.keyboard.press("Enter");
   await expect(cta).toHaveCSS("background-color", "rgb(255, 0, 0)");
   // Une valeur qui n'est pas une couleur est abandonnée.
-  await primary.getByRole("textbox", { name: "primary, clair" }).fill("rouge");
+  await primary
+    .getByRole("textbox", { name: "primary, clair", exact: true })
+    .fill("rouge");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
   await expect(
-    primary.getByRole("textbox", { name: "primary, clair" }),
+    primary.getByRole("textbox", { name: "primary, clair", exact: true }),
   ).toHaveValue("#ff0000");
 
   // Un token utilisé ne se supprime pas.
   await primary.getByRole("button", { name: "Supprimer primary" }).click();
-  await expect(page.getByRole("alert")).toContainText("Encore utilisé");
+  await expect(page.locator("footer").getByRole("alert")).toContainText(
+    "Encore utilisé",
+  );
   await expect(primary).toBeVisible();
 
   // Police du catalogue : la feuille Google Fonts est chargée avec des graisses qui existent.

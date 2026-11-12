@@ -19,19 +19,20 @@ test("content mode edits texts and links, and nothing else", async ({
   const phone = isPhone(page);
   if (phone) {
     // Téléphone : ni mode Design, ni calques, ni largeurs ; un seul artboard de 390 px.
-    await expect(page.getByRole("button", { name: "Design" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Design", exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Calques, pages et tokens" }),
     ).toHaveCount(0);
     await expect(page.getByLabel("Breakpoint édité")).toHaveCount(0);
     await expect(page.locator("[data-artboard]")).toHaveCount(1);
     await expect(page.locator('[data-artboard="390"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: "Contenu" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(
+      page.getByRole("button", { name: "Contenu", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
   } else {
-    await page.getByRole("button", { name: "Contenu" }).click();
+    await page.getByRole("button", { name: "Contenu", exact: true }).click();
     await expect(page.locator('[data-panel="left"]')).toHaveCount(0);
   }
   await expectNoHorizontalScroll(page);
@@ -42,12 +43,14 @@ test("content mode edits texts and links, and nothing else", async ({
   const panel = page.locator('[data-panel="inspector"]');
   await expect(panel).toBeVisible();
   await expect(panel.locator("[data-prop]")).toHaveCount(0);
-  await panel.getByLabel("Texte", { exact: true }).fill("Bonjour Deep Atelier");
+  // Le titre de la landing a deux segments (le second mis en forme) : chacun s'édite.
+  await expect(panel.getByLabel(/^Segment \d/)).toHaveCount(2);
+  await panel.getByLabel(/^Segment 1/).fill("Bonjour, ");
   await page.keyboard.press("Control+Enter");
-  await expect(canvas.locator("h1")).toHaveText("Bonjour Deep Atelier");
+  await expect(canvas.locator("h1")).toHaveText("Bonjour, livrez du vrai code");
 
   // Supprimer ne fait rien en mode Contenu.
-  await panel.getByText("Contenu", { exact: true }).first().click();
+  await page.getByTestId("selection-count").click();
   await page.keyboard.press("Delete");
   await expect(canvas.locator("h1")).toHaveCount(1);
 
@@ -58,16 +61,17 @@ test("content mode edits texts and links, and nothing else", async ({
     canvas.getByRole("link", { name: "Commencer gratuitement" }),
   );
   await expect(panel).toBeVisible();
-  await panel.getByLabel("Libellé").fill("Essayer");
+  await panel.getByLabel("Libellé").fill("Créer mon site");
   await page.keyboard.press("Enter");
-  await expect(canvas.getByRole("link", { name: "Essayer" })).toBeVisible();
+  await expect(
+    canvas.getByRole("link", { name: "Créer mon site" }),
+  ).toBeVisible();
   await panel.getByLabel("Destination").selectOption({ label: "E-mail" });
   await panel.getByLabel("Adresse e-mail").fill("bonjour@example.com");
   await page.keyboard.press("Enter");
-  await expect(canvas.getByRole("link", { name: "Essayer" })).toHaveAttribute(
-    "href",
-    "mailto:bonjour@example.com",
-  );
+  await expect(
+    canvas.getByRole("link", { name: "Créer mon site" }),
+  ).toHaveAttribute("href", "mailto:bonjour@example.com");
 
   // Une image : texte alternatif.
   await closeSheet(page);
@@ -84,7 +88,7 @@ test("content mode edits texts and links, and nothing else", async ({
   await expectNoHorizontalScroll(page);
 
   // L'aperçu reste disponible, sans champs d'édition.
-  await page.getByRole("button", { name: "Aperçu" }).click();
+  await page.getByRole("button", { name: "Aperçu", exact: true }).click();
   await expect(panel).toHaveCount(0);
-  await expect(canvas.locator("h1")).toHaveText("Bonjour Deep Atelier");
+  await expect(canvas.locator("h1")).toHaveText("Bonjour, livrez du vrai code");
 });

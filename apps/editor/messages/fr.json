@@ -76,7 +76,7 @@
       "pages": "Pages",
       "tokens": "Tokens",
       "inspector": "Inspecteur",
-      "content": "Contenu",
+      "content": "Champs de contenu",
       "close": "Fermer : {name}"
     },
     "notices": {
@@ -379,7 +379,8 @@
         "inset": "Interne",
         "removeLayer": "Retirer cette couche",
         "addLayer": "Ajouter une couche"
-      }
+      },
+      "picker": "Choisir : {label}"
     }
   },
   "errors": {
