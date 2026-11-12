@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-import { expectNoHorizontalScroll, signIn } from "./helpers";
+import {
+  expectGitHubButton,
+  expectNoHorizontalScroll,
+  signIn,
+} from "./helpers";
 
 test("protects the projects, signs in with a magic link and signs out", async ({
   page,
@@ -10,9 +14,7 @@ test("protects the projects, signs in with a magic link and signs out", async ({
   await expect(
     page.getByRole("heading", { name: "Connexion à Deep Atelier" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Continuer avec GitHub" }),
-  ).toBeVisible();
+  await expectGitHubButton(page, "Continuer avec GitHub");
   await expectNoHorizontalScroll(page);
 
   await signIn(page);
@@ -33,8 +35,6 @@ test("switches the interface to English", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Sign in to Deep Atelier" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Continue with GitHub" }),
-  ).toBeVisible();
+  await expectGitHubButton(page, "Continue with GitHub");
   await expectNoHorizontalScroll(page);
 });

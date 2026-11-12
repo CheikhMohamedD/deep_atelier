@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { enabledProviders } from "@/lib/auth-providers";
 import { safeNext } from "@/lib/redirect";
 
 export default async function LoginPage({
@@ -11,6 +12,7 @@ export default async function LoginPage({
 }) {
   const { next, error } = await searchParams;
   const t = await getTranslations("auth");
+  const providers = await enabledProviders();
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-12">
       <div className="w-full max-w-sm rounded-xl border border-border p-6 shadow-sm sm:p-8">
@@ -22,7 +24,7 @@ export default async function LoginPage({
           </p>
         ) : null}
         <div className="mt-6">
-          <LoginForm next={safeNext(next)} />
+          <LoginForm next={safeNext(next)} github={providers.github} />
         </div>
       </div>
       <LanguageSwitcher />
